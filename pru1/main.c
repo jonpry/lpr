@@ -126,7 +126,7 @@ void main(void) {
                failidx=(txs-1) | (completes << 8) | (channel << 16);
             }
             //Make sure transfer complete on this channel or we can't reissue
-            if(!(completes & (1<<channel))) {
+            if(completes & (1<<channel)) {
                //ptr[SECR] |= 1<<channel;
                do{
                   ptr[ICR] = 1<<channel;
