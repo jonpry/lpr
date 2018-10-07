@@ -6,6 +6,7 @@
 #include <string.h>
 #include <sys/poll.h>
 #include <sys/mman.h>
+#include <stdbool.h>
 
 #include <zstd.h>
 
@@ -153,6 +154,7 @@ int main(void) {
 
 	while(1){
 		char c=0;
+		bool quit=false;
 		scanf("%c", &c);
 		switch(c){
 			case 'd':
@@ -164,9 +166,30 @@ int main(void) {
 			case 'p':
 				ping(fd);
 				break;
+                        case 'l':
+                                write(fd, "\x01lon", 4);
+       				break;
+			case 'f':
+				write(fd, "\x01loff", 5);
+				break;
+			case 'm':
+				write(fd, "\x01mon", 4);
+				break;
+			case 's':
+				write(fd, "\x01moff", 5);
+				break;
+			case '2':
+				write(fd, "\x01toff", 5);
+				break;
+			case 't':
+				write(fd, "\x01ton", 4);
+				break;
 			case 'x':
+				quit=true;
 				break;
 		}
+		if(quit)
+			break;
 	}
 
 

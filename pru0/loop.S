@@ -468,8 +468,8 @@ no_inte:
     sbbo    &r14, r13, 4, 4
     ;nop - stall
     mov     r10, r12
-    nop
     qbeq   listen, r7, r15
+    nop
     jmp l1 ;do it again
 
     HALT
