@@ -51,10 +51,42 @@ listen:
     LBBO      &r1, r11, 0, 4 ; //Fetch first word 
 
 sos:
+    ;LDI32     r1, 0xAAAAAAAA ; //Fetch first word 
+    CLR       r30, r5, 4
     WBS       r31, 3
+    WBC       r31, 3
+
+   LDI32      r17, 0x2200
+   ldi        r18, 0
+ad:
+   add        r18, r18, 1
+   qbne       ad, r18, r17
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;tst:
+
+;    WBS       r31, 3
+;    WBC       r31, 3
+
+;    LBBO    &r12, r8, 0xc, 4 ; Get cyclecount
+    ;nop - stall
+    ;nop - stall
+    ;nop - stall
+;    sub     r14, r12, r10
+;    nop
+
+
+;    sbbo    &r14, r13, 4, 4
+    ;nop - stall
+;    mov     r10, r12
+
+;    jmp tst
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 l1:
     ;bit 0
-    lsl     r2, r1, 4 ; output is gpo7
+    lsl     r2, r1, 4 ; output is gpo4
     and     r6, r2, r3
     and     r5, r30, r4
     or      r30, r6, r5

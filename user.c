@@ -144,10 +144,25 @@ int main(void) {
         uint8_t *pix = load_file();
 
         //Prime the reserved memory region
-        int b = 0;
+        int b = 0xF0;
+        int w = 1;
+#if 0
         for(i=0; i < PIX_BYTES/4; i++){
-                ddr_map[i] =  ((i&0xFF) > b) && ((i&0xFF) < (b+20)) ? 0xAAAAAAAA: 0 ;//pix[i];//0xAAAAAAAA;
+                ddr_map[i] =  pix[i];//((i&0xFF) >= b) && ((i&0xFF) < (b+w)) ? 0xAAAAAAAA: 0 ;//pix[i];//0xAAAAAAAA;
         }
+#else
+	int j;
+	for(i=0; i < 2400*10; i++){
+		for(j=0; j < 256; j++){
+			uint32_t v=0;
+			if(j == (i/10)%256){
+				v=0xFFFFFFFF;
+			}
+			ddr_map[i*256+j] = v;
+		}
+	}
+#endif
+
         free(pix);
         pix=0;
 
