@@ -20,6 +20,7 @@ CONST_INTC .set	c0
     ;r13 - address of loopcount
     ;r14 - can use
     ;r15 - maximum loopcount
+    ;r16 - Start of scan when 0
 
 ||foo||:
     ;init,
@@ -48,6 +49,9 @@ listen:
     LBBO      &r10, r8, 0xc, 4 ; Get starting cyclecount
 
     LBBO      &r1, r11, 0, 4 ; //Fetch first word 
+
+sos:
+    WBS       r31, 3
 l1:
     ;bit 0
     lsl     r2, r1, 4 ; output is gpo7
@@ -393,8 +397,8 @@ l1:
     and     r5, r30, r4
     or      r30, r6, r5
 
-    nop
-    nop
+    ldi     r16, 0xFF    ;SoS every 0x1000 words
+    and     r16, r16, r7 ;r12==0 when loop%0x100==0
     nop
     nop
     nop
@@ -469,7 +473,7 @@ no_inte:
     ;nop - stall
     mov     r10, r12
     qbeq   listen, r7, r15
-    nop
+    qbeq   sos, r16, r0
     jmp l1 ;do it again
 
     HALT

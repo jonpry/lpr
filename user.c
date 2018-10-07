@@ -144,8 +144,9 @@ int main(void) {
         uint8_t *pix = load_file();
 
         //Prime the reserved memory region
+        int b = 0;
         for(i=0; i < PIX_BYTES/4; i++){
-                ddr_map[i] = i;//pix[i];//0xAAAAAAAA;
+                ddr_map[i] =  ((i&0xFF) > b) && ((i&0xFF) < (b+20)) ? 0xAAAAAAAA: 0 ;//pix[i];//0xAAAAAAAA;
         }
         free(pix);
         pix=0;
