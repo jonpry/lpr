@@ -112,41 +112,45 @@ void main(void) {
 		continue;
 
             uint32_t loops = *(volatile uint32_t*)0x00012000;
-
-            uint32_t channel=1;
-            if(loops & 0x80){
-               channel=0;
-            }
-            txs++;
-
-            uint32_t completes = ptr[IPR];
-            //Both transfers should always be complete or something is wrong
-            if(!(completes & 3)){
-               fails++;
-               failidx=(txs-1) | (completes << 8) | (channel << 16);
-            }
-            //Make sure transfer complete on this channel or we can't reissue
-            if(completes & (1<<channel)) {
-               //ptr[SECR] |= 1<<channel;
-               do{
-                  ptr[ICR] = 1<<channel;
-               } while(ptr[IPR] & (1<<channel));
-               uint32_t nsrc = 0x9e000000 + ((loops<<2) & (0x02000000-1));
-               change_dma(channel,nsrc);
-               ptr[ESR] = (1<<channel);
-            }
-
-            //Send unsolicited status update
-            if((txs & 0xFF) == 0)
-               if(has_dst){
-                  uint8_t buf[25] = {CMD_STAT};
-                  memcpy(buf+1,(uint32_t*)0x00012000,8);
-                  memcpy(buf+9,&completes, 4);
-                  memcpy(buf+13,&fails, 4);
-                  memcpy(buf+17,&txs, 4);
-                  memcpy(buf+21,&failidx, 4);
-                  pru_rpmsg_send(&transport, tdst, src, buf, 25);
+            if(loops==6144000){
+               running = false;
+            }else{
+               uint32_t channel=1;
+               if(loops & 0x80){
+                  channel=0;
                }
+               txs++;
+
+               uint32_t completes = ptr[IPR];
+               //Both transfers should always be complete or something is wrong
+               if(!(completes & 3)){
+                  fails++;
+                  failidx=(txs-1) | (completes << 8) | (channel << 16);
+               }
+               //Make sure transfer complete on this channel or we can't reissue
+               if(completes & (1<<channel)) {
+                  //ptr[SECR] |= 1<<channel;
+                  do{
+                     ptr[ICR] = 1<<channel;
+                  } while(ptr[IPR] & (1<<channel));
+                  uint32_t nsrc = 0x9e000000 + ((loops<<2) & (0x02000000-1));
+                  change_dma(channel,nsrc);
+                  ptr[ESR] = (1<<channel);
+               }
+
+               //Send unsolicited status update
+               if((txs & 0xFF) == 0){
+                  if(has_dst){
+                     uint8_t buf[25] = {CMD_STAT};
+                     memcpy(buf+1,(uint32_t*)0x00012000,8);
+                     memcpy(buf+9,&completes, 4);
+                     memcpy(buf+13,&fails, 4);
+                     memcpy(buf+17,&txs, 4);
+                     memcpy(buf+21,&failidx, 4);
+                     pru_rpmsg_send(&transport, tdst, src, buf, 25);
+                  }
+               }
+            }
          }else if(int_val == FROM_ARM_HOST){
             CT_INTC.SICR_bit.STS_CLR_IDX = FROM_ARM_HOST;
             could_rx = true;
@@ -213,8 +217,7 @@ void main(void) {
             }else if(payload[0] == CMD_RUN && !running){
                running=true;
 //               ptr[SECR] = 3;
-//               ptr[ICR] = 3;
-
+               ptr[ICR] = 3;
 /*
                uint32_t nsrc = 0x9e000000 + ((txs++<<2) & (0x01000000-1));
 	       change_dma(0,nsrc);

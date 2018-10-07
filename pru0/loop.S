@@ -18,6 +18,8 @@ CONST_INTC .set	c0
     ;r11 - shared ram address
     ;r12 - can use
     ;r13 - address of loopcount
+    ;r14 - can use
+    ;r15 - maximum loopcount
 
 ||foo||:
     ;init,
@@ -25,10 +27,12 @@ CONST_INTC .set	c0
     ldi r3, 0x10
     not r4, r3
     mov r5, r30
+listen:
     ldi r7, 0
     LDI32     r8, 0x00022000
     LDI32     r13, 0x00012000 ; Loop counter
     LDI32     r11, 0x00010000 ; Shared RAM
+    LDI32     r15, 6144000 ;maximum loops
 
     ;spin here until pru1 notifies us of run command
     WBS       r31, 30
@@ -465,7 +469,7 @@ no_inte:
     ;nop - stall
     mov     r10, r12
     nop
-    nop
+    qbeq   listen, r7, r15
     jmp l1 ;do it again
 
     HALT
