@@ -1,10 +1,13 @@
 #include <stdio.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <string.h>
 #include <sys/poll.h>
 #include <sys/mman.h>
+
+#include <zstd.h>
 
 #define MAX_BUFFER_SIZE		512
 char readBuf[MAX_BUFFER_SIZE];
@@ -13,6 +16,32 @@ char readBuf[MAX_BUFFER_SIZE];
 #define DEVICE_NAME		"/dev/rpmsg_pru31"
 
 enum { CMD_ST=1, CMD_STAT, CMD_RUN };
+
+#define PIX_BYTES (8192*2400*10/8)
+
+uint8_t* load_file() {
+   FILE *f = fopen("out.raw.zst","r");
+
+   fseek(f, 0L, SEEK_END);
+   size_t csize = ftell(f);
+   fseek(f, 0L, SEEK_SET);
+
+   uint8_t *cdata = malloc(csize);
+   fread(cdata,1,csize,f);
+   fclose(f);
+
+
+   size_t usize = ZSTD_getDecompressedSize(cdata, csize);
+
+   printf("%lu\n", usize);
+   uint8_t* udata = malloc(usize);
+   size_t ret = ZSTD_decompress(udata,usize,cdata,csize);
+
+   free(cdata);
+
+   printf("%lu\n", ret);   
+   return udata;
+}
 
 void ping(int fd){
 	int result,i;
@@ -102,7 +131,7 @@ int main(void) {
 	int fd = open(DEVICE_NAME, O_RDWR);
 	int memfd = open("/dev/mem", O_RDWR | O_SYNC);
 
-        volatile uint32_t *ddr_map = mmap(0, 0x01000000, PROT_READ | PROT_WRITE, MAP_SHARED, memfd, 0x9e000000);
+        volatile uint32_t *ddr_map = mmap(0, 0x02000000, PROT_READ | PROT_WRITE, MAP_SHARED, memfd, 0x9e000000);
         volatile uint32_t *edma_map = mmap(0, 0x8000, PROT_READ | PROT_WRITE, MAP_SHARED, memfd, 0x49000000);
         volatile uint32_t *pru_map = mmap(0, 0x20000, PROT_READ | PROT_WRITE, MAP_SHARED, memfd, 0x4a300000);
 
@@ -111,10 +140,14 @@ int main(void) {
 		return -1;
 	}
 
+        uint8_t *pix = load_file();
+
         //Prime the reserved memory region
-        for(i=0; i < 0x01000000/4; i++){
-                ddr_map[i] = i;//0xAAAAAAAA;
+        for(i=0; i < PIX_BYTES/4; i++){
+                ddr_map[i] = i;//pix[i];//0xAAAAAAAA;
         }
+        free(pix);
+        pix=0;
 
         printf("(d)ma, (r)un, e(x)it, (p)ing\n");
 

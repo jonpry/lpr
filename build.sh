@@ -6,4 +6,4 @@ cd ../pru1
 make clean
 make
 cd ..
-gcc user.c -o user
+gcc user.c -o user -lzstd

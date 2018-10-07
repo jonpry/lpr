@@ -131,7 +131,7 @@ void main(void) {
                do{
                   ptr[ICR] = 1<<channel;
                } while(ptr[IPR] & (1<<channel));
-               uint32_t nsrc = 0x9e000000 + ((loops<<2) & (0x01000000-1));
+               uint32_t nsrc = 0x9e000000 + ((loops<<2) & (0x02000000-1));
                change_dma(channel,nsrc);
                ptr[ESR] = (1<<channel);
             }
