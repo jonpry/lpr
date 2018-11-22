@@ -27,7 +27,7 @@ uint8_t* load_file() {
    size_t csize = ftell(f);
    fseek(f, 0L, SEEK_SET);
 
-   uint8_t *cdata = malloc(csize);
+   uint8_t *cdata = (uint8_t*)malloc(csize);
    fread(cdata,1,csize,f);
    fclose(f);
 
@@ -35,7 +35,7 @@ uint8_t* load_file() {
    size_t usize = ZSTD_getDecompressedSize(cdata, csize);
 
    printf("%lu\n", usize);
-   uint8_t* udata = malloc(usize);
+   uint8_t* udata = (uint8_t*)malloc(usize);
    size_t ret = ZSTD_decompress(udata,usize,cdata,csize);
 
    free(cdata);
@@ -127,14 +127,21 @@ void dma(volatile uint32_t *edma, volatile uint32_t *pru){
 	dma_regs(edma);
 }
 
+void move(int fd, int distance, int pre, int flags){
+   char s[64];
+   sprintf(s,"\x01move%dp%df%de", distance, pre, flags);
+   printf("%s\n", s);
+   write(fd,s,strlen(s));
+}
+
 int main(void) {
 	uint32_t i;
 	int fd = open(DEVICE_NAME, O_RDWR);
 	int memfd = open("/dev/mem", O_RDWR | O_SYNC);
 
-        volatile uint32_t *ddr_map = mmap(0, 0x02000000, PROT_READ | PROT_WRITE, MAP_SHARED, memfd, 0x9e000000);
-        volatile uint32_t *edma_map = mmap(0, 0x8000, PROT_READ | PROT_WRITE, MAP_SHARED, memfd, 0x49000000);
-        volatile uint32_t *pru_map = mmap(0, 0x20000, PROT_READ | PROT_WRITE, MAP_SHARED, memfd, 0x4a300000);
+        volatile uint32_t *ddr_map = (volatile uint32_t *)mmap(0, 0x02000000, PROT_READ | PROT_WRITE, MAP_SHARED, memfd, 0x9e000000);
+        volatile uint32_t *edma_map = (volatile uint32_t *)mmap(0, 0x8000, PROT_READ | PROT_WRITE, MAP_SHARED, memfd, 0x49000000);
+        volatile uint32_t *pru_map = (volatile uint32_t *)mmap(0, 0x20000, PROT_READ | PROT_WRITE, MAP_SHARED, memfd, 0x4a300000);
 
 	if (fd < 0 || memfd < 0 || !pru_map || !edma_map || !ddr_map) {
 		printf("Failed to open %s\n", DEVICE_NAME);
@@ -158,6 +165,12 @@ int main(void) {
 			if(j == (i/10)%256){
 				v=0xFFFFFFFF;
 			}
+                        if(255-j == (i/10)%256){
+                                v=0xFFFFFFFF;
+                        }
+                        if(j==128){
+				v = 1<<(j/8);
+			}
 			ddr_map[i*256+j] = v;
 		}
 	}
@@ -166,7 +179,7 @@ int main(void) {
         free(pix);
         pix=0;
 
-        printf("(d)ma, (r)un, e(x)it, (p)ing\n");
+        printf("(d)ma, (r)un, e(x)it, (p)ing (h)laser, (s)top motor, run (m)otor\n");
 
 	while(1){
 		char c=0;
@@ -199,6 +212,21 @@ int main(void) {
 				break;
 			case 't':
 				write(fd, "\x01ton", 4);
+				break;
+                        case 'h':
+                                write(fd, "\x01tr", 3);
+                                break;
+			case 'i':
+				write(fd, "\x01tir", 4);
+				break;
+    			case '+':
+                                move(fd, 6400*10, 10, 1);
+				break;
+                        case '-':
+                                move(fd, -100000, 25, 0);
+                                break;
+			case 'o':
+				write(fd,"\x01stop",5);
 				break;
 			case 'x':
 				quit=true;
