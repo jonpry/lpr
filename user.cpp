@@ -7,7 +7,7 @@
 #include <sys/poll.h>
 #include <sys/mman.h>
 #include <stdbool.h>
-
+#include <pthread.h>
 #include <zstd.h>
 
 #define MAX_BUFFER_SIZE		512
@@ -44,6 +44,33 @@ uint8_t* load_file() {
    return udata;
 }
 
+volatile bool stopping=false;
+volatile int msgidx=0;
+
+void* read_thread_entry(void* ptr){
+   int fd = (int)ptr;
+   while(!stopping){
+      memset(readBuf,0,512);
+      int result = read(fd, readBuf, MAX_BUFFER_SIZE);
+      printf("Poll ret\n");
+      if (result > 0){
+         if(readBuf[0] == CMD_ST){
+              printf("Message %d received from PRU:%s\n\n", msgidx++, readBuf+1);
+         }
+         else if(readBuf[0] == CMD_STAT){
+             uint32_t loops=0, cycles=0, dmas=0, fails=0, txs=0, failidx=0;
+             memcpy(&loops, readBuf+1, 4);
+             memcpy(&cycles, readBuf+5, 4);
+             memcpy(&dmas, readBuf+9, 4);
+             memcpy(&fails, readBuf+13, 4);
+             memcpy(&txs, readBuf+17, 4);
+             memcpy(&failidx, readBuf+21, 4);
+             printf("LCs 0x%8.8X 0x%8.8X 0x%8.8X 0x%8.8X 0x%8.8X 0x%8.8X\n", loops, cycles, dmas, fails, txs, failidx);
+         }
+      }
+   }
+}
+
 void ping(int fd){
 	int result,i;
 	/* The RPMsg channel exists and the character device is opened */
@@ -51,32 +78,14 @@ void ping(int fd){
 
 	for (i = 0; i < NUM_MESSAGES; i++) {
 		/* Send 'hello world!' to the PRU through the RPMsg channel */
+		int omsgidx=msgidx;
 		result = write(fd, "\x01hello world!", 13);
 		if (result > 0)
 			printf("Message %d: Sent to PRU\n", i);
+		while(omsgidx==msgidx){
+			usleep(1000);
+		}
 
-		/* Poll until we receive a message from the PRU and then print it */
-                while(1){
-                	memset(readBuf,0,512);
-		        result = read(fd, readBuf, MAX_BUFFER_SIZE);
-                        printf("Poll ret\n");
-		        if (result > 0){
-		        	if(readBuf[0] == CMD_ST){
-		        		printf("Message %d received from PRU:%s\n\n", i, readBuf+1);
-		        		break;
-			        }
-			        if(readBuf[0] == CMD_STAT){
-			        	uint32_t loops=0, cycles=0, dmas=0, fails=0, txs=0, failidx=0;
-			        	memcpy(&loops, readBuf+1, 4);
-                                        memcpy(&cycles, readBuf+5, 4);
-                                        memcpy(&dmas, readBuf+9, 4);
-                                        memcpy(&fails, readBuf+13, 4);
-					memcpy(&txs, readBuf+17, 4);
-   					memcpy(&failidx, readBuf+21, 4);
-				        printf("LCs 0x%8.8X 0x%8.8X 0x%8.8X 0x%8.8X 0x%8.8X 0x%8.8X\n", loops, cycles, dmas, fails, txs, failidx);
-			        }
-		        }
-                }
 	}
 
 	/* Received all the messages the example is complete */
@@ -128,10 +137,28 @@ void dma(volatile uint32_t *edma, volatile uint32_t *pru){
 }
 
 void move(int fd, int distance, int pre, int flags){
+   int omsgidx = msgidx;
    char s[64];
    sprintf(s,"\x01move%dp%df%de", distance, pre, flags);
    printf("%s\n", s);
    write(fd,s,strlen(s));
+   while(omsgidx>=(msgidx-1)){
+      usleep(1000);
+   }
+}
+
+#define FAST_HOME 6400
+#define SLOW_HOME 1000
+#define SLOW_MOVE 6400
+#define FAST_MOVE 80000
+#define EXPOSE (6400*6)
+
+void home(int fd){
+   move(fd,6400,FAST_HOME,1);
+   move(fd,-1000000,FAST_HOME,0);
+   move(fd,3200,FAST_HOME,1);
+   move(fd,-1000000,SLOW_HOME,0);
+   move(fd,6400*4,FAST_HOME,1);
 }
 
 int main(void) {
@@ -148,14 +175,16 @@ int main(void) {
 		return -1;
 	}
 
+        pthread_t read_thread;
+        pthread_create(&read_thread, NULL, read_thread_entry, (void*)fd);
         uint8_t *pix = load_file();
 
         //Prime the reserved memory region
         int b = 0xF0;
         int w = 1;
-#if 0
+#if 1
         for(i=0; i < PIX_BYTES/4; i++){
-                ddr_map[i] =  pix[i];//((i&0xFF) >= b) && ((i&0xFF) < (b+w)) ? 0xAAAAAAAA: 0 ;//pix[i];//0xAAAAAAAA;
+                ddr_map[i] =  ((uint32_t*)pix)[i];//((i&0xFF) >= b) && ((i&0xFF) < (b+w)) ? 0xAAAAAAAA: 0 ;//pix[i];//0xAAAAAAAA;
         }
 #else
 	int j;
@@ -191,6 +220,7 @@ int main(void) {
 				break;
 			case 'r':
 				write(fd, "\x03", 1); //Issue the run command
+                                move(fd, 6400*10*6, EXPOSE, 3);
 				break;
 			case 'p':
 				ping(fd);
@@ -219,12 +249,18 @@ int main(void) {
 			case 'i':
 				write(fd, "\x01tir", 4);
 				break;
+                        case 'g':
+			        write(fd, "\x01gotime", 7);
+                                break;
     			case '+':
-                                move(fd, 6400*10, 10, 1);
+                                move(fd, 6400*10*6, EXPOSE, 1);
 				break;
                         case '-':
-                                move(fd, -100000, 25, 0);
+                                move(fd, -6400*10*6, SLOW_MOVE, 0);
                                 break;
+			case 'a':
+				home(fd);
+				break;
 			case 'o':
 				write(fd,"\x01stop",5);
 				break;
@@ -239,8 +275,9 @@ int main(void) {
 
 
 	/* Close the rpmsg_pru character device file */
+        stopping=true;
 	close(fd);
-
+        pthread_join(read_thread, NULL);
 	return 0;
 }
 

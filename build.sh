@@ -6,4 +6,4 @@ cd ../pru1
 make clean
 make
 cd ..
-g++ user.cpp -o user -lzstd -g
+g++ user.cpp -o user -lzstd -lpthread -g
