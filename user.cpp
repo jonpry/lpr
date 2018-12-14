@@ -153,13 +153,14 @@ void move(int fd, int distance, int pre, int flags){
 #define SLOW_MOVE 6400
 #define FAST_MOVE 80000
 #define EXPOSE (6400*6)
+#define EXPOSE_RET (6400*12)
 
 void home(int fd){
    move(fd,6400,FAST_HOME,1);
    move(fd,-1000000,FAST_HOME,0);
    move(fd,3200,FAST_HOME,1);
    move(fd,-1000000,SLOW_HOME,0);
-   move(fd,6400*4,FAST_HOME,1);
+   move(fd,6400,FAST_HOME,1);
 }
 
 int main(void) {
@@ -185,7 +186,12 @@ int main(void) {
         int w = 1;
 #if 1
         for(i=0; i < PIX_BYTES/4; i++){
-                ddr_map[i] = 0xFFFFFFFF;// ((uint32_t*)pix)[i];//((i&0xFF) >= b) && ((i&0xFF) < (b+w)) ? 0xAAAAAAAA: 0 ;//pix[i];//0xAAAAAAAA;
+//                ddr_map[i] = ((uint32_t*)pix)[i];//((i&0xFF) >= b) && ((i&0xFF) < (b+w)) ? 0xAAAAAAAA: 0 ;//pix[i];//0xAAAAAAAA;
+		int mod = i %256;
+               if(mod < 250)
+		   ddr_map[i] = 0xFFFFFFFF;
+              else
+                  ddr_map[i] = 0;
         }
 #else
 	int j;
@@ -220,11 +226,13 @@ int main(void) {
 				dma(edma_map, pru_map);
 				break;
 			case 'r': {
-                                uint32_t max_loops=256*2000*9;
+                                uint32_t max_loops=(int)(256*2000*9.5);
                                 uint8_t tbuf[5] = {3};
                                 memcpy(tbuf+1,&max_loops, 4);
 			        write(fd, tbuf, 5); //Issue the run command
-                                move(fd, (int)(6400*5*25.4/4), EXPOSE, 3);
+                                int distance = (int)(6400*9*25.4/4);
+                                move(fd, distance, EXPOSE, 3);
+                                move(fd, -distance, EXPOSE_RET, 1);
 				} break;
 			case 'p':
 				ping(fd);

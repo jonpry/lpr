@@ -226,6 +226,7 @@ void main(void) {
                change_dma(1,nsrc);
 */
               memcpy(&max_loops, payload+1,4);
+//              max_loops=6144000;
               *(volatile uint32_t*)0x00012008 = max_loops;
 
 
