@@ -185,7 +185,7 @@ int main(void) {
         int w = 1;
 #if 1
         for(i=0; i < PIX_BYTES/4; i++){
-                ddr_map[i] =  ((uint32_t*)pix)[i];//((i&0xFF) >= b) && ((i&0xFF) < (b+w)) ? 0xAAAAAAAA: 0 ;//pix[i];//0xAAAAAAAA;
+                ddr_map[i] = 0xFFFFFFFF;// ((uint32_t*)pix)[i];//((i&0xFF) >= b) && ((i&0xFF) < (b+w)) ? 0xAAAAAAAA: 0 ;//pix[i];//0xAAAAAAAA;
         }
 #else
 	int j;
@@ -219,10 +219,13 @@ int main(void) {
 			case 'd':
 				dma(edma_map, pru_map);
 				break;
-			case 'r':
-				write(fd, "\x03", 1); //Issue the run command
-                                move(fd, 6400*10*6, EXPOSE, 3);
-				break;
+			case 'r': {
+                                uint32_t max_loops=256*2000*9;
+                                uint8_t tbuf[5] = {3};
+                                memcpy(tbuf+1,&max_loops, 4);
+			        write(fd, tbuf, 5); //Issue the run command
+                                move(fd, (int)(6400*5*25.4/4), EXPOSE, 3);
+				} break;
 			case 'p':
 				ping(fd);
 				break;

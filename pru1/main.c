@@ -103,6 +103,7 @@ void main(void) {
    uint32_t fails=0;
    uint32_t txs=0;
    uint32_t failidx=0xAAAAAAA;
+   uint32_t max_loops=0;
    while (1) {
       if(__R31 & HOST_INT){
          int int_val = CT_INTC.HIPIR1;
@@ -112,7 +113,7 @@ void main(void) {
 		continue;
 
             uint32_t loops = *(volatile uint32_t*)0x00012000;
-            if(loops==6144000){
+            if(loops==max_loops){
                running = false;
             }else{
                uint32_t channel=1;
@@ -224,6 +225,10 @@ void main(void) {
                nsrc = 0x9e000000 + ((txs++<<2) & (0x01000000-1));
                change_dma(1,nsrc);
 */
+              memcpy(&max_loops, payload+1,4);
+              *(volatile uint32_t*)0x00012008 = max_loops;
+
+
                //Trigger both transfers
                ptr[ESR] = (1<<1);
                while(!(ptr[IPR] & 2)){}

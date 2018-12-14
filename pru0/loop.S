@@ -33,12 +33,16 @@ listen:
     LDI32     r8, 0x00022000
     LDI32     r13, 0x00012000 ; Loop counter
     LDI32     r11, 0x00010000 ; Shared RAM
-    LDI32     r15, 6144000 ;maximum loops
+    ;LDI32     r15, 6144000 ;maximum loops
 
     ;spin here until pru1 notifies us of run command
     WBS       r31, 30
     ldi      r12, 16
     SBCO     &r12, CONST_INTC, 0x24, 4  ;clear the interrupt
+
+    LBBO    &r15, r13, 0x8, 4 ; Get maximum loops
+
+
 
     ;disable, then enable cycle counter
     LBBO      &r10, r8, 0, 4   ; load CYCLE register - extra delay from here
