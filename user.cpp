@@ -48,7 +48,7 @@ volatile bool stopping=false;
 volatile int msgidx=0;
 
 void* read_thread_entry(void* ptr){
-   int fd = (int)ptr;
+   int fd = (int)(size_t)ptr;
    while(!stopping){
       memset(readBuf,0,512);
       int result = read(fd, readBuf, MAX_BUFFER_SIZE);
@@ -69,6 +69,7 @@ void* read_thread_entry(void* ptr){
          }
       }
    }
+   return 0;
 }
 
 void ping(int fd){
@@ -176,7 +177,7 @@ int main(void) {
 	}
 
         pthread_t read_thread;
-        pthread_create(&read_thread, NULL, read_thread_entry, (void*)fd);
+        pthread_create(&read_thread, NULL, read_thread_entry, (void*)(size_t)fd);
         uint8_t *pix = load_file();
 
         //Prime the reserved memory region
