@@ -89,10 +89,12 @@ int fd_set_blocking(int fd, int blocking) {
 Machine *gMachine=0;
 
 void procFdMsg(uint8_t* readBuf, int len){
-   printf("GodMsg\n");
+   printf("Got Msg %x\n", readBuf[0]);
    if(readBuf[0] == CMD_ST){
       if(gMachine)
          gMachine->onST((char*)readBuf+1);
+      else
+         printf("Received ST: %s\n", readBuf+1);
    }else if(readBuf[0] == CMD_STAT){
       uint32_t loops=0, cycles=0, dmas=0, fails=0, txs=0, failidx=0;
       memcpy(&loops, readBuf+1, 4);
@@ -411,12 +413,16 @@ int main(void) {
    printf("(d)ma, (r)un, e(x)it, (p)ing (h)laser, (s)top motor, run (m)otor\n");
 
    while(!quit){
-      if(poll(pollfds,2,1000)>0){
+      //printf("Poll\n");
+      if(poll(pollfds,3,1000)>0){
+         //printf("Poll ret\n");
          for(int i=0; i < 3; i++){
             if(pollfds[i].revents==0)
                continue;
+            //printf("Read on: %d\n", i);
             memset(readBuf,0,512);
             int result = read(pollfds[i].fd, readBuf, MAX_BUFFER_SIZE);
+            //printf("Read: %d\n", result);
             for(int j=0; j < result; j++){
                 switch(i){
                     case 0: procFd(readBuf[j]); break;
