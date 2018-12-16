@@ -24,9 +24,15 @@ char readBuf[MAX_BUFFER_SIZE];
 #define NUM_MESSAGES		400
 #define DEVICE_NAME		"/dev/rpmsg_pru31"
 
+#define Z_OFST          -1.0f
+#define LIFT_DISTANCE   3.5f
+
+
 enum { CMD_ST=1, CMD_STAT, CMD_RUN };
 
 #define PIX_BYTES (8192*2400*10/8)
+
+#define WRITE(fd,str) mwrite(fd,str,strlen(str))
 
 class Machine {
  public:
@@ -198,7 +204,7 @@ void move(int distance, int pre, int flags){
    char s[64];
    sprintf(s,"\x01move%dp%df%de", distance, pre, flags);
    printf("%s\n", s);
-   mwrite(rpmsgfd,s,strlen(s));
+   WRITE(rpmsgfd,s);
 }
 
 #define FAST_HOME 6400
@@ -214,13 +220,13 @@ class PingMachine : public Machine {
       /* The RPMsg channel exists and the character device is opened */
       printf("Opened %s, sending %d messages\n\n", DEVICE_NAME, NUM_MESSAGES);
 
-      mwrite(rpmsgfd, "\x01hello world!", 13);
+      WRITE(rpmsgfd, "\x01hello world!");
       mState=0;
    }
 
    void onST(char *str){
       if(mState < NUM_MESSAGES){
-         mwrite(rpmsgfd, "\x01hello world!", 13);
+         WRITE(rpmsgfd, "\x01hello world!");
       }else if(mState == NUM_MESSAGES){
 	 /* Received all the messages the example is complete */
 	 printf("Received %d messages, closing %s\n", NUM_MESSAGES, DEVICE_NAME);
@@ -245,13 +251,13 @@ class HomeMachine : public Machine {
          case 1: move(3200,FAST_HOME,1); break;
          case 2: move(-1000000,SLOW_HOME,0); break;
          case 3: move(6400,FAST_HOME,1); break;
-         case 4: mwrite(grblfd,"$H\n", 4); break;
+         case 4: WRITE(grblfd,"$H\n"); break;
       }
    }
 
    void onOk() override {
       switch(mState++){
-         case 5: mwrite(grblfd, "G4 P0.1\n", 9); break;
+         case 5: WRITE(grblfd, "G4 P0.1\n"); break;
          case 6: gMachine=0; delete this;
       }
    }
@@ -259,35 +265,80 @@ class HomeMachine : public Machine {
    int mState;
 };
 
+#define FAST_FEED 100.0f
+#define SLOW_FEED 20.0f
+#define STAB_SEC  1.0f
 class RunMachine : public Machine {
  public:
    RunMachine(){
+      char buf[64];
+      sprintf(buf, "G0 Y%f F%f\n", LIFT_DISTANCE+Z_OFST, FAST_FEED);
+      WRITE(grblfd, buf); 
+      mState=0;
+      mGrblState=0;
+      mStopped=false;
+      mGrblStopped=false;
+   }
+
+   void issueRun(){
       uint32_t max_loops=(int)(256*2000*9.5);
       uint8_t tbuf[5] = {3};
       memcpy(tbuf+1,&max_loops, 4);
       mwrite(rpmsgfd, tbuf, 5); //Issue the run command
       mDistance = (int)(6400*9*25.4/4);
 
-      mwrite(grblfd, "G0 Y0\n", 7); 
-      mState=0;
+      move(mDistance, EXPOSE, 3); 
+      printf("Issue run\n");
+   }
+
+   void checkStop(){
+      if(mStopped && mGrblStopped){
+         printf("Complete\n");
+         gMachine=0;
+         delete this;
+      }
    }
 
    void onStop(){
+      char buf[64];
       switch(mState++){
-         case 2: move(-mDistance, EXPOSE_RET, 1); break;
-         case 3: gMachine=0; delete this;
+         case 0: 
+            move(-mDistance, EXPOSE_RET, 1); 
+            sprintf(buf, "G0 Y%f F%f\n", LIFT_DISTANCE+Z_OFST, SLOW_FEED);
+            WRITE(grblfd, buf); 
+            break;
+         case 1: 
+            mStopped = true;
+            checkStop();
       }
    }
 
    void onOk() override{
       printf("OK %d\n", mState);
-      switch(mState++){
-         case 0: mwrite(grblfd, "G4 P0.1\n", 9); break;
-         case 1: move(mDistance, EXPOSE, 3); printf("Exec move\n"); break;
+      char buf[64];
+      switch(mGrblState++){
+         case 0: 
+            sprintf(buf, "G0 Y%f F%f\n", Z_OFST, SLOW_FEED);
+            WRITE(grblfd, buf); 
+            break;
+         case 1: 
+            sprintf(buf, "G4 P%f\n", STAB_SEC);
+            WRITE(grblfd, buf); 
+            break;
+         case 2:  
+            issueRun(); 
+            break;
+         case 3:
+            WRITE(grblfd, "G4 P0.1\n");
+            break;             
+         case 4:
+            mGrblStopped=true;
+            checkStop();
       }
    }
 
-   int mState,mDistance;
+   int mState,mGrblState,mDistance;
+   bool mStopped, mGrblStopped;
 };
 
 bool quit=false;
@@ -304,31 +355,31 @@ void procIn(uint8_t c){
 	 gMachine = new PingMachine();
 	 break;
       case 'l':
-         mwrite(rpmsgfd, "\x01lon", 4);
+         WRITE(rpmsgfd, "\x01lon");
        	 break;
       case 'f':
-	 mwrite(rpmsgfd, "\x01loff", 5);
+	 WRITE(rpmsgfd, "\x01loff");
 	 break;
       case 'm':
-	 mwrite(rpmsgfd, "\x01mon", 4);
+	 WRITE(rpmsgfd, "\x01mon");
 	 break;
       case 's':
-	 mwrite(rpmsgfd, "\x01moff", 5);
+	 WRITE(rpmsgfd, "\x01moff");
 	 break;
       case '2':
-	 mwrite(rpmsgfd, "\x01toff", 5);
+	 WRITE(rpmsgfd, "\x01toff");
 	 break;
       case 't':
-	 mwrite(rpmsgfd, "\x01ton", 4);
+	 WRITE(rpmsgfd, "\x01ton");
 	 break;
       case 'h':
-         mwrite(rpmsgfd, "\x01tr", 3);
+         WRITE(rpmsgfd, "\x01tr");
          break;
       case 'i':
-	 mwrite(rpmsgfd, "\x01tir", 4);
+	 WRITE(rpmsgfd, "\x01tir");
 	 break;
       case 'g':
-         mwrite(rpmsgfd, "\x01gotime", 7);
+         WRITE(rpmsgfd, "\x01gotime");
          break;
       case '+':
          move(6400*10*6, EXPOSE, 1);
@@ -340,7 +391,7 @@ void procIn(uint8_t c){
 	 gMachine = new HomeMachine();
 	 break;
       case 'o':
-	 mwrite(rpmsgfd,"\x01stop",5);
+	 WRITE(rpmsgfd,"\x01stop");
 	 break;
       case 'x':
 	 quit=true;
