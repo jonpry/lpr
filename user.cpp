@@ -130,7 +130,7 @@ void procGrbl(uint8_t c){
    static int pos=0;
    static uint8_t msg[512]={};
    msg[pos++] = c;
-   printf("Grbl: %x\n", c);
+   //printf("Grbl: %x\n", c);
    if(c=='\n'){
       printf("RX'd GRBL: %s", msg);
       memset(msg,0,512);
@@ -329,16 +329,11 @@ void setup(int fd){
    cfsetispeed(&tio, B115200);
    cfsetospeed(&tio, B115200);
 #if 1
-   tio.c_cflag &= ~PARENB;
-   tio.c_cflag &= ~CSTOPB;
-   tio.c_cflag &= ~CSIZE;
-   tio.c_cflag |= CS8;
-   /* no hardware flow control */
-   tio.c_cflag &= ~CRTSCTS;
-   /* enable receiver, ignore status lines */
-   tio.c_cflag |= CREAD | CLOCAL;
-   /* disable input/output flow control, disable restart chars */
-   tio.c_iflag &= ~(IXON | IXOFF | IXANY);
+   tio.c_cflag |= CREAD|CLOCAL;
+   tio.c_lflag &= (~(ICANON|ECHO|ECHOE|ECHOK|ECHONL|ISIG));
+   tio.c_iflag &= (~(INPCK|IGNPAR|PARMRK|ISTRIP|ICRNL|IXANY));
+   tio.c_oflag &= (~OPOST);
+   tio.c_cc[VMIN] = 0;
 #endif
    errno = 0;
    tcsetattr(fd, TCSANOW, &tio);
@@ -357,7 +352,7 @@ int main(void) {
    uint32_t i;
    rpmsgfd = open(DEVICE_NAME, O_RDWR);
    int memfd = open("/dev/mem", O_RDWR | O_SYNC);
-   int grblfd = open("/dev/ttyUSB0", O_RDWR | O_NOCTTY);
+   int grblfd = open("/dev/ttyUSB0", O_RDWR | O_NOCTTY | O_NDELAY);
    setup(grblfd);
    fd_set_blocking(rpmsgfd,false);
    fd_set_blocking(grblfd,false);
