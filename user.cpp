@@ -35,19 +35,22 @@ class Machine {
 
    virtual void onST(char *str){
      printf("Message received from PRU:%s\n",  str);
-     if(strstr("Stopped",str))
+     if(strstr(str,"Stopped"))
         onStop();
    }
    virtual void onStop() {}
    virtual void onGrbl(char *str){
-      if(strstr("unlock", str)){
+      printf("Mach grbl: %s\n", str);
+      if(strstr(str,"unlock")){
+         printf("On unlock\n");
          onGrblReady();
-      }else if(strstr("ok", str)){
+      }else if(strstr(str,"ok")){
+         printf("On ok\n");
          onOk();
       }
    }
    virtual void onGrblReady(){}
-   virtual void onOk(){}
+   virtual void onOk(){printf("Def ok\n");}
 };
 
 
@@ -242,13 +245,13 @@ class HomeMachine : public Machine {
          case 1: move(3200,FAST_HOME,1); break;
          case 2: move(-1000000,SLOW_HOME,0); break;
          case 3: move(6400,FAST_HOME,1); break;
-         case 4: mwrite(grblfd,"$H\r\n", 4); break;
+         case 4: mwrite(grblfd,"$H\n", 4); break;
       }
    }
 
-   void onOk(){
+   void onOk() override {
       switch(mState++){
-         case 5: mwrite(grblfd, "F4 P0.1\r\n", 9); break;
+         case 5: mwrite(grblfd, "G4 P0.1\n", 9); break;
          case 6: gMachine=0; delete this;
       }
    }
@@ -265,7 +268,7 @@ class RunMachine : public Machine {
       mwrite(rpmsgfd, tbuf, 5); //Issue the run command
       mDistance = (int)(6400*9*25.4/4);
 
-      mwrite(grblfd, "G0 Y0\r\n", 7); 
+      mwrite(grblfd, "G0 Y0\n", 7); 
       mState=0;
    }
 
@@ -276,10 +279,11 @@ class RunMachine : public Machine {
       }
    }
 
-   void onOk(){
+   void onOk() override{
+      printf("OK %d\n", mState);
       switch(mState++){
-         case 0: mwrite(grblfd, "F4 P0.1\r\n", 9); break;
-         case 1: move(mDistance, EXPOSE, 3); break;
+         case 0: mwrite(grblfd, "F4 P0.1\n", 9); break;
+         case 1: move(mDistance, EXPOSE, 3); printf("Exec move\n"); break;
       }
    }
 
