@@ -312,8 +312,8 @@ class RunMachine : public Machine {
          case 0: 
             move(-mDistance, EXPOSE_RET, 1); 
             sprintf(buf, "G1 Y%f F%f\n", LIFT_DISTANCE+Z_OFST+mZ, SLOW_FEED);
-            if(mMoveZ);
-            WRITE(grblfd, buf); 
+            if(mMoveZ)
+               WRITE(grblfd, buf); 
             break;
          case 1: 
             mStopped = true;
