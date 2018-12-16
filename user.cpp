@@ -274,7 +274,7 @@ class RunMachine : public Machine {
  public:
    RunMachine(){
       char buf[64];
-      sprintf(buf, "G0 Y%f F%f\n", LIFT_DISTANCE+Z_OFST, FAST_FEED);
+      sprintf(buf, "G1 Y%f F%f\n", LIFT_DISTANCE+Z_OFST, FAST_FEED);
       WRITE(grblfd, buf); 
       mState=0;
       mGrblState=0;
@@ -306,7 +306,7 @@ class RunMachine : public Machine {
       switch(mState++){
          case 0: 
             move(-mDistance, EXPOSE_RET, 1); 
-            sprintf(buf, "G0 Y%f F%f\n", LIFT_DISTANCE+Z_OFST, SLOW_FEED);
+            sprintf(buf, "G1 Y%f F%f\n", LIFT_DISTANCE+Z_OFST, SLOW_FEED);
             WRITE(grblfd, buf); 
             break;
          case 1: 
@@ -320,7 +320,7 @@ class RunMachine : public Machine {
       char buf[64];
       switch(mGrblState++){
          case 0: 
-            sprintf(buf, "G0 Y%f F%f\n", Z_OFST, SLOW_FEED);
+            sprintf(buf, "G1 Y%f F%f\n", Z_OFST, SLOW_FEED);
             WRITE(grblfd, buf); 
             break;
          case 1: 
