@@ -328,17 +328,17 @@ void setup(int fd){
 
    cfsetispeed(&tio, B57600);
    cfsetospeed(&tio, B57600);
-#if 0
-   toptions.c_cflag &= ~PARENB;
- toptions.c_cflag &= ~CSTOPB;
- toptions.c_cflag &= ~CSIZE;
- toptions.c_cflag |= CS8;
- /* no hardware flow control */
- toptions.c_cflag &= ~CRTSCTS;
- /* enable receiver, ignore status lines */
- toptions.c_cflag |= CREAD | CLOCAL;
- /* disable input/output flow control, disable restart chars */
- toptions.c_iflag &= ~(IXON | IXOFF | IXANY);
+#if 1
+   tio.c_cflag &= ~PARENB;
+   tio.c_cflag &= ~CSTOPB;
+   tio.c_cflag &= ~CSIZE;
+   tio.c_cflag |= CS8;
+   /* no hardware flow control */
+   tio.c_cflag &= ~CRTSCTS;
+   /* enable receiver, ignore status lines */
+   tio.c_cflag |= CREAD | CLOCAL;
+   /* disable input/output flow control, disable restart chars */
+   tio.c_iflag &= ~(IXON | IXOFF | IXANY);
 #endif
    errno = 0;
    tcsetattr(fd, TCSANOW, &tio);
