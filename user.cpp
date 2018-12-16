@@ -12,6 +12,7 @@
 #include <termios.h>
 #include <errno.h>
 #include <poll.h>
+#include <assert.h>
 
 #include <list>
 #include <algorithm>
@@ -28,6 +29,10 @@ enum { CMD_ST=1, CMD_STAT, CMD_RUN };
 #define PIX_BYTES (8192*2400*10/8)
 
 int rpmsgfd;
+
+void mwrite(int fd, const void* d, size_t l){
+   assert(write(fd,d,l)==l);
+}
 
 uint8_t* load_file() {
    FILE *f = fopen("out.raw.zst","r");
@@ -106,16 +111,14 @@ void procGrbl(uint8_t c){
 
 
 void ping(int fd){
-	int result,i;
+	int i;
 	/* The RPMsg channel exists and the character device is opened */
 	printf("Opened %s, sending %d messages\n\n", DEVICE_NAME, NUM_MESSAGES);
 
 	for (i = 0; i < NUM_MESSAGES; i++) {
 		/* Send 'hello world!' to the PRU through the RPMsg channel */
 		int omsgidx=0;//TODO: msgidx;
-		result = write(fd, "\x01hello world!", 13);
-		if (result > 0)
-			printf("Message %d: Sent to PRU\n", i);
+		mwrite(fd, "\x01hello world!", 13);
 		while(omsgidx==0){
 			usleep(1000);
 		}
@@ -175,7 +178,7 @@ void move(int fd, int distance, int pre, int flags){
    char s[64];
    sprintf(s,"\x01move%dp%df%de", distance, pre, flags);
    printf("%s\n", s);
-   write(fd,s,strlen(s));
+   mwrite(fd,s,strlen(s));
    while(omsgidx>=(0-1)){
       usleep(1000);
    }
@@ -207,7 +210,7 @@ void procIn(uint8_t c){
          uint32_t max_loops=(int)(256*2000*9.5);
          uint8_t tbuf[5] = {3};
          memcpy(tbuf+1,&max_loops, 4);
-         write(rpmsgfd, tbuf, 5); //Issue the run command
+         mwrite(rpmsgfd, tbuf, 5); //Issue the run command
          int distance = (int)(6400*9*25.4/4);
          move(rpmsgfd, distance, EXPOSE, 3);
          move(rpmsgfd, -distance, EXPOSE_RET, 1);
@@ -216,31 +219,31 @@ void procIn(uint8_t c){
 	 ping(rpmsgfd);
 	 break;
       case 'l':
-         write(rpmsgfd, "\x01lon", 4);
+         mwrite(rpmsgfd, "\x01lon", 4);
        	 break;
       case 'f':
-	 write(rpmsgfd, "\x01loff", 5);
+	 mwrite(rpmsgfd, "\x01loff", 5);
 	 break;
       case 'm':
-	 write(rpmsgfd, "\x01mon", 4);
+	 mwrite(rpmsgfd, "\x01mon", 4);
 	 break;
       case 's':
-	 write(rpmsgfd, "\x01moff", 5);
+	 mwrite(rpmsgfd, "\x01moff", 5);
 	 break;
       case '2':
-	 write(rpmsgfd, "\x01toff", 5);
+	 mwrite(rpmsgfd, "\x01toff", 5);
 	 break;
       case 't':
-	 write(rpmsgfd, "\x01ton", 4);
+	 mwrite(rpmsgfd, "\x01ton", 4);
 	 break;
       case 'h':
-         write(rpmsgfd, "\x01tr", 3);
+         mwrite(rpmsgfd, "\x01tr", 3);
          break;
       case 'i':
-	 write(rpmsgfd, "\x01tir", 4);
+	 mwrite(rpmsgfd, "\x01tir", 4);
 	 break;
       case 'g':
-         write(rpmsgfd, "\x01gotime", 7);
+         mwrite(rpmsgfd, "\x01gotime", 7);
          break;
       case '+':
          move(rpmsgfd, 6400*10*6, EXPOSE, 1);
@@ -252,7 +255,7 @@ void procIn(uint8_t c){
 	 home(rpmsgfd);
 	 break;
       case 'o':
-	 write(rpmsgfd,"\x01stop",5);
+	 mwrite(rpmsgfd,"\x01stop",5);
 	 break;
       case 'x':
 	 quit=true;

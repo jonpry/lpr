@@ -142,13 +142,13 @@ void main(void) {
                //Send unsolicited status update
                if((txs & 0xFF) == 0){
                   if(has_dst){
-                     uint8_t buf[25] = {CMD_STAT};
-                     memcpy(buf+1,(uint32_t*)0x00012000,8);
-                     memcpy(buf+9,&completes, 4);
-                     memcpy(buf+13,&fails, 4);
-                     memcpy(buf+17,&txs, 4);
-                     memcpy(buf+21,&failidx, 4);
-                     pru_rpmsg_send(&transport, tdst, src, buf, 25);
+                     uint8_t buf[26] = {25,CMD_STAT};
+                     memcpy(buf+2,(uint32_t*)0x00012000,8);
+                     memcpy(buf+10,&completes, 4);
+                     memcpy(buf+14,&fails, 4);
+                     memcpy(buf+18,&txs, 4);
+                     memcpy(buf+22,&failidx, 4);
+                     pru_rpmsg_send(&transport, tdst, src, buf, 26);
                   }
                }
             }
@@ -161,13 +161,14 @@ void main(void) {
          if(!has_len){
            rxlen = t;
            if(rxlen <= 64 && rxlen > 0){
-             rxpos = 1;
-             rxbuffer[0] = 1;
+             rxpos = 2;
+             rxbuffer[0] = rxlen+1;
+             rxbuffer[1] = 1;
              has_len = true;
            }
          }else{
            rxbuffer[rxpos++] = t;
-           if(rxpos == rxlen+1){
+           if(rxpos == rxlen+2){
              has_len = false;
              if(has_dst){
                pru_rpmsg_send(&transport, tdst, src, rxbuffer, rxpos);
