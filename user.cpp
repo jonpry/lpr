@@ -268,7 +268,7 @@ class HomeMachine : public Machine {
 };
 
 #define FAST_FEED 100.0f
-#define SLOW_FEED 20.0f
+#define SLOW_FEED 40.0f
 #define STAB_SEC  1.0f
 class RunMachine : public Machine {
  public:
