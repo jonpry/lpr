@@ -264,14 +264,22 @@ class RunMachine : public Machine {
       memcpy(tbuf+1,&max_loops, 4);
       mwrite(rpmsgfd, tbuf, 5); //Issue the run command
       mDistance = (int)(6400*9*25.4/4);
-      move(mDistance, EXPOSE, 3);
+
+      mwrite(grblfd, "G0 Y0\r\n", 7); 
       mState=0;
    }
 
    void onStop(){
       switch(mState++){
-         case 0: move(-mDistance, EXPOSE_RET, 1); break;
-         case 1: gMachine=0; delete this;
+         case 2: move(-mDistance, EXPOSE_RET, 1); break;
+         case 3: gMachine=0; delete this;
+      }
+   }
+
+   void onOk(){
+      switch(mState++){
+         case 0: mwrite(grblfd, "F4 P0.1\r\n", 9); break;
+         case 1: move(mDistance, EXPOSE, 3); break;
       }
    }
 
