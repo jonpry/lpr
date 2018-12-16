@@ -9,6 +9,13 @@
 #include <stdbool.h>
 #include <pthread.h>
 #include <zstd.h>
+#include <termios.h>
+#include <errno.h>
+#include <poll.h>
+
+#include <list>
+#include <algorithm>
+using namespace std;
 
 #define MAX_BUFFER_SIZE		512
 char readBuf[MAX_BUFFER_SIZE];
@@ -19,6 +26,8 @@ char readBuf[MAX_BUFFER_SIZE];
 enum { CMD_ST=1, CMD_STAT, CMD_RUN };
 
 #define PIX_BYTES (8192*2400*10/8)
+
+int rpmsgfd;
 
 uint8_t* load_file() {
    FILE *f = fopen("out.raw.zst","r");
@@ -44,33 +53,57 @@ uint8_t* load_file() {
    return udata;
 }
 
-volatile bool stopping=false;
-volatile int msgidx=0;
+int fd_set_blocking(int fd, int blocking) {
+    /* Save the current flags */
+    int flags = fcntl(fd, F_GETFL, 0);
+    if (flags == -1)
+        return 0;
 
-void* read_thread_entry(void* ptr){
-   int fd = (int)(size_t)ptr;
-   while(!stopping){
-      memset(readBuf,0,512);
-      int result = read(fd, readBuf, MAX_BUFFER_SIZE);
-      printf("Poll ret\n");
-      if (result > 0){
-         if(readBuf[0] == CMD_ST){
-              printf("Message %d received from PRU:%s\n\n", msgidx++, readBuf+1);
-         }
-         else if(readBuf[0] == CMD_STAT){
-             uint32_t loops=0, cycles=0, dmas=0, fails=0, txs=0, failidx=0;
-             memcpy(&loops, readBuf+1, 4);
-             memcpy(&cycles, readBuf+5, 4);
-             memcpy(&dmas, readBuf+9, 4);
-             memcpy(&fails, readBuf+13, 4);
-             memcpy(&txs, readBuf+17, 4);
-             memcpy(&failidx, readBuf+21, 4);
-             printf("LCs 0x%8.8X 0x%8.8X 0x%8.8X 0x%8.8X 0x%8.8X 0x%8.8X\n", loops, cycles, dmas, fails, txs, failidx);
-         }
-      }
-   }
-   return 0;
+    if (blocking)
+        flags &= ~O_NONBLOCK;
+    else
+        flags |= O_NONBLOCK;
+    return fcntl(fd, F_SETFL, flags) != -1;
 }
+
+void procFdMsg(uint8_t* readBuf, int len){
+   printf("GodMsg\n");
+   if(readBuf[0] == CMD_ST){
+     // printf("Message %d received from PRU:%s\n\n", msgidx++, readBuf+1);
+   }else if(readBuf[0] == CMD_STAT){
+      uint32_t loops=0, cycles=0, dmas=0, fails=0, txs=0, failidx=0;
+      memcpy(&loops, readBuf+1, 4);
+      memcpy(&cycles, readBuf+5, 4);
+      memcpy(&dmas, readBuf+9, 4);
+      memcpy(&fails, readBuf+13, 4);
+      memcpy(&txs, readBuf+17, 4);
+      memcpy(&failidx, readBuf+21, 4);
+      printf("LCs 0x%8.8X 0x%8.8X 0x%8.8X 0x%8.8X 0x%8.8X 0x%8.8X\n", loops, cycles, dmas, fails, txs, failidx);
+   }
+}
+
+void procFd(uint8_t c){
+   static bool hasLen=false;
+   static int len=0, pos=0;
+   static uint8_t msg[512];
+
+   if(!hasLen){
+      hasLen=true;
+      len = c;
+      pos = 0;
+      return;
+   }
+   msg[pos++] = c;
+   if(pos == len){
+      hasLen=false;
+      procFdMsg(msg,len);
+   }   
+}
+
+void procGrbl(uint8_t c){
+
+}
+
 
 void ping(int fd){
 	int result,i;
@@ -79,11 +112,11 @@ void ping(int fd){
 
 	for (i = 0; i < NUM_MESSAGES; i++) {
 		/* Send 'hello world!' to the PRU through the RPMsg channel */
-		int omsgidx=msgidx;
+		int omsgidx=0;//TODO: msgidx;
 		result = write(fd, "\x01hello world!", 13);
 		if (result > 0)
 			printf("Message %d: Sent to PRU\n", i);
-		while(omsgidx==msgidx){
+		while(omsgidx==0){
 			usleep(1000);
 		}
 
@@ -138,12 +171,12 @@ void dma(volatile uint32_t *edma, volatile uint32_t *pru){
 }
 
 void move(int fd, int distance, int pre, int flags){
-   int omsgidx = msgidx;
+   int omsgidx = 0;//TODO:msgidx;
    char s[64];
    sprintf(s,"\x01move%dp%df%de", distance, pre, flags);
    printf("%s\n", s);
    write(fd,s,strlen(s));
-   while(omsgidx>=(msgidx-1)){
+   while(omsgidx>=(0-1)){
       usleep(1000);
    }
 }
@@ -163,133 +196,170 @@ void home(int fd){
    move(fd,6400,FAST_HOME,1);
 }
 
+bool quit=false;
+
+void procIn(uint8_t c){
+   switch(c){
+      case 'd':
+	 //dma(edma_map, pru_map);
+	 break;
+      case 'r': {
+         uint32_t max_loops=(int)(256*2000*9.5);
+         uint8_t tbuf[5] = {3};
+         memcpy(tbuf+1,&max_loops, 4);
+         write(rpmsgfd, tbuf, 5); //Issue the run command
+         int distance = (int)(6400*9*25.4/4);
+         move(rpmsgfd, distance, EXPOSE, 3);
+         move(rpmsgfd, -distance, EXPOSE_RET, 1);
+	 } break;
+      case 'p':
+	 ping(rpmsgfd);
+	 break;
+      case 'l':
+         write(rpmsgfd, "\x01lon", 4);
+       	 break;
+      case 'f':
+	 write(rpmsgfd, "\x01loff", 5);
+	 break;
+      case 'm':
+	 write(rpmsgfd, "\x01mon", 4);
+	 break;
+      case 's':
+	 write(rpmsgfd, "\x01moff", 5);
+	 break;
+      case '2':
+	 write(rpmsgfd, "\x01toff", 5);
+	 break;
+      case 't':
+	 write(rpmsgfd, "\x01ton", 4);
+	 break;
+      case 'h':
+         write(rpmsgfd, "\x01tr", 3);
+         break;
+      case 'i':
+	 write(rpmsgfd, "\x01tir", 4);
+	 break;
+      case 'g':
+         write(rpmsgfd, "\x01gotime", 7);
+         break;
+      case '+':
+         move(rpmsgfd, 6400*10*6, EXPOSE, 1);
+	 break;
+      case '-':
+         move(rpmsgfd, -6400*10*6, SLOW_MOVE, 0);
+         break;
+      case 'a':
+	 home(rpmsgfd);
+	 break;
+      case 'o':
+	 write(rpmsgfd,"\x01stop",5);
+	 break;
+      case 'x':
+	 quit=true;
+	 break;
+   }
+}
+
+
+void setup(int fd){
+   struct termios tio;
+   tcgetattr(fd, &tio);
+   cfmakeraw(&tio);
+   errno = 0;
+   tcsetattr(fd, TCSANOW, &tio);
+   if (errno != 0){
+      printf("Error setting TCSANOW flag on at_modem %d %s\n", fd, strerror(errno));
+   }
+   errno = 0;
+   tcflush(fd, TCIOFLUSH);
+   if (errno != 0){
+      printf("Error flushing: %d %s\n",fd, strerror(errno));
+   }
+   
+}
+
 int main(void) {
-	uint32_t i;
-	int fd = open(DEVICE_NAME, O_RDWR);
-	int memfd = open("/dev/mem", O_RDWR | O_SYNC);
+   uint32_t i;
+   rpmsgfd = open(DEVICE_NAME, O_RDWR);
+   int memfd = open("/dev/mem", O_RDWR | O_SYNC);
+   int grblfd = open("/dev/ttyUSB0", O_RDWR);
+   setup(grblfd);
+   fd_set_blocking(rpmsgfd,false);
+   fd_set_blocking(grblfd,false);
+   fd_set_blocking(STDIN_FILENO,false);
 
-        volatile uint32_t *ddr_map = (volatile uint32_t *)mmap(0, 0x02000000, PROT_READ | PROT_WRITE, MAP_SHARED, memfd, 0x9e000000);
-        volatile uint32_t *edma_map = (volatile uint32_t *)mmap(0, 0x8000, PROT_READ | PROT_WRITE, MAP_SHARED, memfd, 0x49000000);
-        volatile uint32_t *pru_map = (volatile uint32_t *)mmap(0, 0x20000, PROT_READ | PROT_WRITE, MAP_SHARED, memfd, 0x4a300000);
+   volatile uint32_t *ddr_map = (volatile uint32_t *)mmap(0, 0x02000000, PROT_READ | PROT_WRITE, MAP_SHARED, memfd, 0x9e000000);
+   volatile uint32_t *edma_map = (volatile uint32_t *)mmap(0, 0x8000, PROT_READ | PROT_WRITE, MAP_SHARED, memfd, 0x49000000);
+   volatile uint32_t *pru_map = (volatile uint32_t *)mmap(0, 0x20000, PROT_READ | PROT_WRITE, MAP_SHARED, memfd, 0x4a300000);
 
-	if (fd < 0 || memfd < 0 || !pru_map || !edma_map || !ddr_map) {
-		printf("Failed to open %s\n", DEVICE_NAME);
-		return -1;
-	}
+   if (rpmsgfd < 0 || grblfd < 0 || memfd < 0 || !pru_map || !edma_map || !ddr_map) {
+      printf("Failed to open %s\n", DEVICE_NAME);
+      return -1;
+   }
 
-        pthread_t read_thread;
-        pthread_create(&read_thread, NULL, read_thread_entry, (void*)(size_t)fd);
-        uint8_t *pix = load_file();
+   struct pollfd pollfds[3] = {{rpmsgfd,POLLIN},{grblfd,POLLIN},{STDIN_FILENO,POLLIN}};
 
-        //Prime the reserved memory region
-        int b = 0xF0;
-        int w = 1;
+
+   uint8_t *pix = load_file();
+
+   //Prime the reserved memory region
+   int b = 0xF0;
+   int w = 1;
 #if 1
-        for(i=0; i < PIX_BYTES/4; i++){
-//                ddr_map[i] = ((uint32_t*)pix)[i];//((i&0xFF) >= b) && ((i&0xFF) < (b+w)) ? 0xAAAAAAAA: 0 ;//pix[i];//0xAAAAAAAA;
-		int mod = i %256;
-               if(mod < 250)
-		   ddr_map[i] = 0xFFFFFFFF;
-              else
-                  ddr_map[i] = 0;
-        }
+   for(i=0; i < PIX_BYTES/4; i++){
+//    ddr_map[i] = ((uint32_t*)pix)[i];//((i&0xFF) >= b) && ((i&0xFF) < (b+w)) ? 0xAAAAAAAA: 0 ;//pix[i];//0xAAAAAAAA;
+      int mod = i %256;
+      if(mod < 250)
+         ddr_map[i] = 0xFFFFFFFF;
+      else
+         ddr_map[i] = 0;
+   }
 #else
-	int j;
-	for(i=0; i < 2400*10; i++){
-		for(j=0; j < 256; j++){
-			uint32_t v=0;
-			if(j == (i/10)%256){
-				v=0xFFFFFFFF;
-			}
-                        if(255-j == (i/10)%256){
-                                v=0xFFFFFFFF;
-                        }
-                        if(j==128){
-				v = 1<<(j/8);
-			}
-			ddr_map[i*256+j] = v;
-		}
-	}
+   int j;
+   for(i=0; i < 2400*10; i++){
+      for(j=0; j < 256; j++){
+	 uint32_t v=0;
+	 if(j == (i/10)%256){
+	    v=0xFFFFFFFF;
+	 }
+         if(255-j == (i/10)%256){
+            v=0xFFFFFFFF;
+         }
+         if(j==128){
+	    v = 1<<(j/8);
+	 }
+	 ddr_map[i*256+j] = v;
+      }
+   }
 #endif
 
-        free(pix);
-        pix=0;
+   free(pix);
+   pix=0;
 
-        printf("(d)ma, (r)un, e(x)it, (p)ing (h)laser, (s)top motor, run (m)otor\n");
+   printf("(d)ma, (r)un, e(x)it, (p)ing (h)laser, (s)top motor, run (m)otor\n");
 
-	while(1){
-		char c=0;
-		bool quit=false;
-		scanf("%c", &c);
-		switch(c){
-			case 'd':
-				dma(edma_map, pru_map);
-				break;
-			case 'r': {
-                                uint32_t max_loops=(int)(256*2000*9.5);
-                                uint8_t tbuf[5] = {3};
-                                memcpy(tbuf+1,&max_loops, 4);
-			        write(fd, tbuf, 5); //Issue the run command
-                                int distance = (int)(6400*9*25.4/4);
-                                move(fd, distance, EXPOSE, 3);
-                                move(fd, -distance, EXPOSE_RET, 1);
-				} break;
-			case 'p':
-				ping(fd);
-				break;
-                        case 'l':
-                                write(fd, "\x01lon", 4);
-       				break;
-			case 'f':
-				write(fd, "\x01loff", 5);
-				break;
-			case 'm':
-				write(fd, "\x01mon", 4);
-				break;
-			case 's':
-				write(fd, "\x01moff", 5);
-				break;
-			case '2':
-				write(fd, "\x01toff", 5);
-				break;
-			case 't':
-				write(fd, "\x01ton", 4);
-				break;
-                        case 'h':
-                                write(fd, "\x01tr", 3);
-                                break;
-			case 'i':
-				write(fd, "\x01tir", 4);
-				break;
-                        case 'g':
-			        write(fd, "\x01gotime", 7);
-                                break;
-    			case '+':
-                                move(fd, 6400*10*6, EXPOSE, 1);
-				break;
-                        case '-':
-                                move(fd, -6400*10*6, SLOW_MOVE, 0);
-                                break;
-			case 'a':
-				home(fd);
-				break;
-			case 'o':
-				write(fd,"\x01stop",5);
-				break;
-			case 'x':
-				quit=true;
-				break;
-		}
-		if(quit)
-			break;
-	}
+   while(!quit){
+      if(poll(pollfds,2,1000)>0){
+         for(int i=0; i < 3; i++){
+            if(pollfds[i].revents==0)
+               continue;
+            memset(readBuf,0,512);
+            int result = read(pollfds[i].fd, readBuf, MAX_BUFFER_SIZE);
+            for(int j=0; j < result; j++){
+                switch(i){
+                    case 0: procFd(readBuf[j]); break;
+                    case 1: procGrbl(readBuf[j]); break;
+                    case 2: procIn(readBuf[j]); break;
+                }
+            }
+         }   
+      }
+   }
 
 
-
-	/* Close the rpmsg_pru character device file */
-        stopping=true;
-	close(fd);
-        pthread_join(read_thread, NULL);
-	return 0;
+   /* Close the rpmsg_pru character device file */
+   close(rpmsgfd);
+   close(grblfd);
+   return 0;
 }
 
