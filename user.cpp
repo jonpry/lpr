@@ -39,6 +39,7 @@ class Machine {
         onStop();
    }
    virtual void onStop() {}
+   virtual void onGrbl(char *str){}
 };
 
 
@@ -321,6 +322,21 @@ void setup(int fd){
    struct termios tio;
    tcgetattr(fd, &tio);
    cfmakeraw(&tio);
+
+   cfsetispeed(&tio, B57600);
+   cfsetospeed(&tio, B57600);
+#if 0
+   toptions.c_cflag &= ~PARENB;
+ toptions.c_cflag &= ~CSTOPB;
+ toptions.c_cflag &= ~CSIZE;
+ toptions.c_cflag |= CS8;
+ /* no hardware flow control */
+ toptions.c_cflag &= ~CRTSCTS;
+ /* enable receiver, ignore status lines */
+ toptions.c_cflag |= CREAD | CLOCAL;
+ /* disable input/output flow control, disable restart chars */
+ toptions.c_iflag &= ~(IXON | IXOFF | IXANY);
+#endif
    errno = 0;
    tcsetattr(fd, TCSANOW, &tio);
    if (errno != 0){
