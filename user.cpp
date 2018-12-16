@@ -272,15 +272,19 @@ class HomeMachine : public Machine {
 #define STAB_SEC  1.0f
 class RunMachine : public Machine {
  public:
-   RunMachine(float z){
+   RunMachine(float z, bool movez){
       char buf[64];
       sprintf(buf, "G1 Y%f F%f\n", LIFT_DISTANCE+Z_OFST+z, FAST_FEED);
-      WRITE(grblfd, buf); 
+      if(movez)
+         WRITE(grblfd, buf); 
+      else
+         issueRun();
       mState=0;
       mZ = z;
+      mMoveZ = movez;
       mGrblState=0;
       mStopped=false;
-      mGrblStopped=false;
+      mGrblStopped=!movez;
    }
 
    void issueRun(){
@@ -308,6 +312,7 @@ class RunMachine : public Machine {
          case 0: 
             move(-mDistance, EXPOSE_RET, 1); 
             sprintf(buf, "G1 Y%f F%f\n", LIFT_DISTANCE+Z_OFST+mZ, SLOW_FEED);
+            if(mMoveZ);
             WRITE(grblfd, buf); 
             break;
          case 1: 
@@ -343,6 +348,7 @@ class RunMachine : public Machine {
    int mState,mGrblState,mDistance;
    bool mStopped, mGrblStopped;
    float mZ;
+   bool mMoveZ;
 };
 
 bool quit=false;
@@ -353,7 +359,7 @@ void procIn(uint8_t c){
 	 //dma(edma_map, pru_map);
 	 break;
       case 'r': 
-         gMachine = new RunMachine(10);
+         gMachine = new RunMachine(10,false);
          break;
       case 'p':
 	 gMachine = new PingMachine();
