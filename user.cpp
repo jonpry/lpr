@@ -124,7 +124,14 @@ void procFd(uint8_t c){
 }
 
 void procGrbl(uint8_t c){
-
+   static int pos=0;
+   static uint8_t msg[512]={};
+   msg[pos++] = c;
+   if(c=='\n'){
+      printf("RX'd GRBL: %s", msg);
+      memset(msg,0,512);
+      pos=0;
+   }
 }
 
 #define EMR             (0x0300 / 4)
@@ -149,25 +156,24 @@ void procGrbl(uint8_t c){
 
 
 void dma_regs(volatile uint32_t *edma){
-        printf("IPR: 0x%X\n", edma[IPR]);
+   printf("IPR: 0x%X\n", edma[IPR]);
 
-        printf("ESR: 0x%X\n", edma[ESR]);
-        printf("EMR: 0x%X\n", edma[EMR]);
-        printf("SER: 0x%X\n", edma[SER]);
-	printf("IESR: 0x%X\n", edma[IECR]);
-        printf("SECR: 0x%X\n", edma[SECR]);
-
+   printf("ESR: 0x%X\n", edma[ESR]);
+   printf("EMR: 0x%X\n", edma[EMR]);
+   printf("SER: 0x%X\n", edma[SER]);
+   printf("IESR: 0x%X\n", edma[IECR]);
+   printf("SECR: 0x%X\n", edma[SECR]);
 }
 
 void dma(volatile uint32_t *edma, volatile uint32_t *pru){
-        printf("PRU 0x%X\n", pru[0x10000/4]);
+   printf("PRU 0x%X\n", pru[0x10000/4]);
 
-	dma_regs(edma);
+   dma_regs(edma);
 
-	printf("Clearing ICR\n");
-//        edma[ICR] = 3;
+   printf("Clearing ICR\n");
+//  edma[ICR] = 3;
 
-	dma_regs(edma);
+   dma_regs(edma);
 }
 
 void move(int distance, int pre, int flags){
