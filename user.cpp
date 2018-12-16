@@ -39,11 +39,19 @@ class Machine {
         onStop();
    }
    virtual void onStop() {}
-   virtual void onGrbl(char *str){}
+   virtual void onGrbl(char *str){
+      if(strstr("unlock", str)){
+         onGrblReady();
+      }else if(strstr("ok", str)){
+         onOk();
+      }
+   }
+   virtual void onGrblReady(){}
+   virtual void onOk(){}
 };
 
 
-int rpmsgfd;
+int rpmsgfd, grblfd;
 
 void mwrite(int fd, const void* d, size_t l){
    assert(write(fd,d,l)==l);
@@ -133,6 +141,8 @@ void procGrbl(uint8_t c){
    //printf("Grbl: %x\n", c);
    if(c=='\n'){
       printf("RX'd GRBL: %s", msg);
+      if(gMachine)
+        gMachine->onGrbl((char*)msg);
       memset(msg,0,512);
       pos=0;
    }
@@ -232,7 +242,14 @@ class HomeMachine : public Machine {
          case 1: move(3200,FAST_HOME,1); break;
          case 2: move(-1000000,SLOW_HOME,0); break;
          case 3: move(6400,FAST_HOME,1); break;
-         case 4: gMachine=0; delete this;
+         case 4: mwrite(grblfd,"$H\r\n", 4); break;
+      }
+   }
+
+   void onOk(){
+      switch(mState++){
+         case 5: mwrite(grblfd, "F4 P0.1\r\n", 9); break;
+         case 6: gMachine=0; delete this;
       }
    }
 
@@ -260,7 +277,6 @@ class RunMachine : public Machine {
 
    int mState,mDistance;
 };
-
 
 bool quit=false;
 
@@ -352,7 +368,7 @@ int main(void) {
    uint32_t i;
    rpmsgfd = open(DEVICE_NAME, O_RDWR);
    int memfd = open("/dev/mem", O_RDWR | O_SYNC);
-   int grblfd = open("/dev/ttyUSB0", O_RDWR | O_NOCTTY | O_NDELAY);
+   grblfd = open("/dev/ttyUSB0", O_RDWR | O_NOCTTY | O_NDELAY);
    setup(grblfd);
    fd_set_blocking(rpmsgfd,false);
    fd_set_blocking(grblfd,false);
