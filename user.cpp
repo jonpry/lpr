@@ -64,6 +64,8 @@ int rpmsgfd, grblfd;
 
 void mwrite(int fd, const void* d, size_t l){
    assert(write(fd,d,l)==l);
+   if(fd == grblfd)
+      printf("GRBL wr: %s", d);
 }
 
 uint8_t* load_file() {
