@@ -357,7 +357,7 @@ int main(void) {
    uint32_t i;
    rpmsgfd = open(DEVICE_NAME, O_RDWR);
    int memfd = open("/dev/mem", O_RDWR | O_SYNC);
-   int grblfd = open("/dev/ttyUSB0", O_RDWR);
+   int grblfd = open("/dev/ttyUSB0", O_RDWR | O_NOCTTY);
    setup(grblfd);
    fd_set_blocking(rpmsgfd,false);
    fd_set_blocking(grblfd,false);
