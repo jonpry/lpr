@@ -28,6 +28,20 @@ enum { CMD_ST=1, CMD_STAT, CMD_RUN };
 
 #define PIX_BYTES (8192*2400*10/8)
 
+class Machine {
+ public:
+   Machine() {}
+   virtual ~Machine() {}
+
+   virtual void onST(char *str){
+     printf("Message received from PRU:%s\n",  str);
+     if(strstr("Stopped",str))
+        onStop();
+   }
+   virtual void onStop() {}
+};
+
+
 int rpmsgfd;
 
 void mwrite(int fd, const void* d, size_t l){
@@ -71,10 +85,13 @@ int fd_set_blocking(int fd, int blocking) {
     return fcntl(fd, F_SETFL, flags) != -1;
 }
 
+Machine *gMachine=0;
+
 void procFdMsg(uint8_t* readBuf, int len){
    printf("GodMsg\n");
    if(readBuf[0] == CMD_ST){
-     // printf("Message %d received from PRU:%s\n\n", msgidx++, readBuf+1);
+      if(gMachine)
+         gMachine->onST((char*)readBuf+1);
    }else if(readBuf[0] == CMD_STAT){
       uint32_t loops=0, cycles=0, dmas=0, fails=0, txs=0, failidx=0;
       memcpy(&loops, readBuf+1, 4);
@@ -96,6 +113,7 @@ void procFd(uint8_t c){
       hasLen=true;
       len = c;
       pos = 0;
+      memset(msg,0,512);
       return;
    }
    msg[pos++] = c;
@@ -106,27 +124,6 @@ void procFd(uint8_t c){
 }
 
 void procGrbl(uint8_t c){
-
-}
-
-
-void ping(int fd){
-	int i;
-	/* The RPMsg channel exists and the character device is opened */
-	printf("Opened %s, sending %d messages\n\n", DEVICE_NAME, NUM_MESSAGES);
-
-	for (i = 0; i < NUM_MESSAGES; i++) {
-		/* Send 'hello world!' to the PRU through the RPMsg channel */
-		int omsgidx=0;//TODO: msgidx;
-		mwrite(fd, "\x01hello world!", 13);
-		while(omsgidx==0){
-			usleep(1000);
-		}
-
-	}
-
-	/* Received all the messages the example is complete */
-	printf("Received %d messages, closing %s\n", NUM_MESSAGES, DEVICE_NAME);
 
 }
 
@@ -173,15 +170,12 @@ void dma(volatile uint32_t *edma, volatile uint32_t *pru){
 	dma_regs(edma);
 }
 
-void move(int fd, int distance, int pre, int flags){
+void move(int distance, int pre, int flags){
    int omsgidx = 0;//TODO:msgidx;
    char s[64];
    sprintf(s,"\x01move%dp%df%de", distance, pre, flags);
    printf("%s\n", s);
-   mwrite(fd,s,strlen(s));
-   while(omsgidx>=(0-1)){
-      usleep(1000);
-   }
+   mwrite(rpmsgfd,s,strlen(s));
 }
 
 #define FAST_HOME 6400
@@ -191,13 +185,72 @@ void move(int fd, int distance, int pre, int flags){
 #define EXPOSE (6400*6)
 #define EXPOSE_RET (6400*12)
 
-void home(int fd){
-   move(fd,6400,FAST_HOME,1);
-   move(fd,-1000000,FAST_HOME,0);
-   move(fd,3200,FAST_HOME,1);
-   move(fd,-1000000,SLOW_HOME,0);
-   move(fd,6400,FAST_HOME,1);
-}
+class PingMachine : public Machine {
+ public:
+   PingMachine(){
+      /* The RPMsg channel exists and the character device is opened */
+      printf("Opened %s, sending %d messages\n\n", DEVICE_NAME, NUM_MESSAGES);
+
+      mwrite(rpmsgfd, "\x01hello world!", 13);
+      mState=0;
+   }
+
+   void onST(char *str){
+      if(mState < NUM_MESSAGES){
+         mwrite(rpmsgfd, "\x01hello world!", 13);
+      }else if(mState == NUM_MESSAGES){
+	 /* Received all the messages the example is complete */
+	 printf("Received %d messages, closing %s\n", NUM_MESSAGES, DEVICE_NAME);
+         gMachine=0;
+         delete this;
+      }
+   }
+
+   int mState;
+};
+
+class HomeMachine : public Machine {
+ public:
+   HomeMachine(){
+      move(6400,FAST_HOME,1);
+      mState=0;
+   }
+
+   void onStop(){
+      switch(mState++){
+         case 0: move(-1000000,FAST_HOME,0); break;
+         case 1: move(3200,FAST_HOME,1); break;
+         case 2: move(-1000000,SLOW_HOME,0); break;
+         case 3: move(6400,FAST_HOME,1); break;
+         case 4: gMachine=0; delete this;
+      }
+   }
+
+   int mState;
+};
+
+class RunMachine : public Machine {
+ public:
+   RunMachine(){
+      uint32_t max_loops=(int)(256*2000*9.5);
+      uint8_t tbuf[5] = {3};
+      memcpy(tbuf+1,&max_loops, 4);
+      mwrite(rpmsgfd, tbuf, 5); //Issue the run command
+      mDistance = (int)(6400*9*25.4/4);
+      move(mDistance, EXPOSE, 3);
+      mState=0;
+   }
+
+   void onStop(){
+      switch(mState++){
+         case 0: move(-mDistance, EXPOSE_RET, 1); break;
+         case 1: gMachine=0; delete this;
+      }
+   }
+
+   int mState,mDistance;
+};
+
 
 bool quit=false;
 
@@ -206,17 +259,11 @@ void procIn(uint8_t c){
       case 'd':
 	 //dma(edma_map, pru_map);
 	 break;
-      case 'r': {
-         uint32_t max_loops=(int)(256*2000*9.5);
-         uint8_t tbuf[5] = {3};
-         memcpy(tbuf+1,&max_loops, 4);
-         mwrite(rpmsgfd, tbuf, 5); //Issue the run command
-         int distance = (int)(6400*9*25.4/4);
-         move(rpmsgfd, distance, EXPOSE, 3);
-         move(rpmsgfd, -distance, EXPOSE_RET, 1);
-	 } break;
+      case 'r': 
+         gMachine = new RunMachine();
+         break;
       case 'p':
-	 ping(rpmsgfd);
+	 gMachine = new PingMachine();
 	 break;
       case 'l':
          mwrite(rpmsgfd, "\x01lon", 4);
@@ -246,13 +293,13 @@ void procIn(uint8_t c){
          mwrite(rpmsgfd, "\x01gotime", 7);
          break;
       case '+':
-         move(rpmsgfd, 6400*10*6, EXPOSE, 1);
+         move(6400*10*6, EXPOSE, 1);
 	 break;
       case '-':
-         move(rpmsgfd, -6400*10*6, SLOW_MOVE, 0);
+         move(-6400*10*6, SLOW_MOVE, 0);
          break;
       case 'a':
-	 home(rpmsgfd);
+	 gMachine = new HomeMachine();
 	 break;
       case 'o':
 	 mwrite(rpmsgfd,"\x01stop",5);
