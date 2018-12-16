@@ -282,7 +282,7 @@ class RunMachine : public Machine {
    void onOk() override{
       printf("OK %d\n", mState);
       switch(mState++){
-         case 0: mwrite(grblfd, "F4 P0.1\n", 9); break;
+         case 0: mwrite(grblfd, "G4 P0.1\n", 9); break;
          case 1: move(mDistance, EXPOSE, 3); printf("Exec move\n"); break;
       }
    }
