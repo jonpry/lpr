@@ -326,8 +326,8 @@ void setup(int fd){
    tcgetattr(fd, &tio);
    cfmakeraw(&tio);
 
-   cfsetispeed(&tio, B57600);
-   cfsetospeed(&tio, B57600);
+   cfsetispeed(&tio, B115200);
+   cfsetospeed(&tio, B115200);
 #if 1
    tio.c_cflag &= ~PARENB;
    tio.c_cflag &= ~CSTOPB;
