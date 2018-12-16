@@ -129,6 +129,7 @@ void procGrbl(uint8_t c){
    static int pos=0;
    static uint8_t msg[512]={};
    msg[pos++] = c;
+   printf("Grbl: %x\n", c);
    if(c=='\n'){
       printf("RX'd GRBL: %s", msg);
       memset(msg,0,512);
