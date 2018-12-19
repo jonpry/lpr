@@ -1,22 +1,4 @@
-#include <stdio.h>
-#include <stdint.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <fcntl.h>
-#include <string.h>
-#include <sys/poll.h>
-#include <sys/mman.h>
-#include <stdbool.h>
-#include <pthread.h>
-#include <zstd.h>
-#include <termios.h>
-#include <errno.h>
-#include <poll.h>
-#include <assert.h>
-
-#include <list>
-#include <algorithm>
-using namespace std;
+#include "main.h"
 
 #define MAX_BUFFER_SIZE		512
 char readBuf[MAX_BUFFER_SIZE];
@@ -68,29 +50,6 @@ void mwrite(int fd, const void* d, size_t l){
       printf("GRBL wr: %s", d);
 }
 
-uint8_t* load_file() {
-   FILE *f = fopen("out.raw.zst","r");
-
-   fseek(f, 0L, SEEK_END);
-   size_t csize = ftell(f);
-   fseek(f, 0L, SEEK_SET);
-
-   uint8_t *cdata = (uint8_t*)malloc(csize);
-   fread(cdata,1,csize,f);
-   fclose(f);
-
-
-   size_t usize = ZSTD_getDecompressedSize(cdata, csize);
-
-   printf("%lu\n", usize);
-   uint8_t* udata = (uint8_t*)malloc(usize);
-   size_t ret = ZSTD_decompress(udata,usize,cdata,csize);
-
-   free(cdata);
-
-   printf("%lu\n", ret);   
-   return udata;
-}
 
 int fd_set_blocking(int fd, int blocking) {
     /* Save the current flags */

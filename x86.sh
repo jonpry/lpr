@@ -1,2 +1,2 @@
 #!/bin/sh
-g++ user.cpp -o user -lzstd -lpthread -g
+g++ user.cpp file.cpp -o user -lzstd -lpthread -g
