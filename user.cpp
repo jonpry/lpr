@@ -44,6 +44,7 @@ class Machine {
    virtual void onGrblReady(){}
    virtual void onOk(){printf("Def ok\n");}
    virtual void onDone(Machine *){}
+   virtual void onReady(Machine *){}
    virtual void done(){
       if(m_parent){
          m_parent->onDone(this);
@@ -286,6 +287,8 @@ class LayerMachine : public Machine {
       char buf[64];
       switch(mState++){
          case 0: 
+            if(m_parent)
+              m_parent->onReady(this);
             move(-mDistance, EXPOSE_RET, 1); 
             sprintf(buf, "G1 Y%f F%f\n", LIFT_DISTANCE+Z_OFST+mZ, SLOW_FEED);
             if(mMoveZ)
@@ -368,21 +371,38 @@ class RunMachine : public Machine {
  public:
    RunMachine(){
       get();
-      gMachine = new LayerMachine(this,10,false);
+      m_lastZ = m_z;
+      m_layers = gFileLoader->m_header.layers;
+      m_layer = 1;
+      gMachine = new LayerMachine(this,m_z,true);
    }
 
    void onDone(Machine *){
-      //gMachine = new LayerMachine(this,10,false);
+      if(m_layer++ < m_layers){
+        get();
+        gMachine = new LayerMachine(this,m_z,m_lastZ!=m_z);
+      }else{
+         printf("Done\n");
+         delete this;
+      }
+   }
+
+   void onReady(Machine *){
+      if(m_layer < m_layers)
+        gFileLoader->begin(m_layer);
    }
 
    void get(){
       printf("Get\n");
-      gFileLoader->get((uint8_t*)gDdrMap);
+      m_lastZ = m_z;
+      m_z = gFileLoader->get((uint8_t*)gDdrMap);
       printf("Got\n");
 
       sanitize();
    }
 
+   int m_layers, m_layer;
+   float m_lastZ, m_z;
 };
 
 bool quit=false;
