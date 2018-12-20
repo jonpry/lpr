@@ -1,0 +1,176 @@
+/*
+ * Copyright (C) 2016 Seeed Studio.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ */
+
+/dts-v1/;
+/plugin/;
+
+#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/pinctrl/am33xx.h>
+
+/{
+	part-number = "PB-PWM0";
+	version = "00A0";
+
+	/*
+	 * Free up the pins used by the cape from the pinmux helpers.
+	 */
+	fragment@0 {
+		target = <&ocp>;
+		__overlay__ {
+			P1_36_pinmux { status = "disabled"; };	/* (A13) spi0_d0.ehrpwm0A */
+			P1_06_pinmux { status = "disabled"; };	/* (A16) pr1_uart0_txd */
+			P1_12_pinmux { status = "disabled"; };	/* (B14) pr1_uart0_rxd */
+			P1_20_pinmux { status = "disabled"; };	/* (D14) pr0_gpio16, gpio0_20, 20, pin 109, 0x1b4 */
+			P1_29_pinmux { status = "disabled"; };	/* (A14) pr0_gpio7, gpio3_21, 117, pin 107, 0x1ac */
+			P1_30_pinmux { status = "disabled"; };	/* (E16) pr1_gpio15, gpio1_11, 43, pin 93, 0x174 */
+			P1_31_pinmux { status = "disabled"; };	/* (B12) pr0_gpio4, gpio3_18, 114, pin 104, 0x1a0 */
+			P2_28_pinmux { status = "disabled"; };	/* (D13) pr0_gpio6, gpio3_20, 116, input, pin 106, 0x1a8 */
+			P2_30_pinmux { status = "disabled"; };	/* (C12) pr0_gpio3, gpio3_17, 113, input, pin 103, 0x19c */
+		};
+	};
+
+	fragment@1 {
+		target = <&am33xx_pinmux>;
+		__overlay__ {
+			bb_pwm0_pin: pinmux-pwm0-pin {
+				pinctrl-single,pins = <
+					0x190 0x11 /* (A17) spi0_sclk.ehrpwm0A */
+				>;
+			};
+		};
+	};
+
+	fragment@2 {
+		target = <&ocp>;
+		__overlay__ {
+			bb_pwm0_test_helper: bb_pwm0_helper {
+				compatible = "bone-pinmux-helper";
+				pinctrl-names = "default";
+				pinctrl-0 = <&bb_pwm0_pin>;
+				status = "okay";
+			};
+		};
+	};
+
+	fragment@3 {
+		target = <&epwmss0>;
+		__overlay__ {
+			status = "okay";
+		};
+	};
+
+	fragment@4 {
+		target = <&ehrpwm0>;
+		__overlay__ {
+			status = "okay";
+		};
+	};
+
+
+	fragment@5 {
+		target = <&am33xx_pinmux>;
+		__overlay__ {
+			pru_cape_bone_pins: pru_cape_bone_pins {
+				pinctrl-single,pins = <
+					0x15c 0x04	/* P1_06: OMAP_MUX_MODE4 | AM33XX_PIN_OUTPUT, pr1_uart0_txd, pin87 */ 
+					0x158 0x24	/* P1_12: OMAP_MUX_MODE4 | AM33XX_PIN_INPUT, pr1_uart0_rxd, pin86 */
+					0x1b4 0x25	/* P1_20: OMAP_MUX_MODE6 | AM33XX_PIN_INPUT, pr0_gpi16 */
+					0x1ac 0x26	/* P1_29: OMAP_MUX_MODE6 | AM33XX_PIN_INPUT, pr0_gpi7 */
+					0x1a0 0x05	/* P1_31: OMAP_MUX_MODE6 | AM33XX_PIN_INPUT, pr0_gpo4 */
+					0x174 0x26	/* P1_30: OMAP_MUX_MODE6 | AM33XX_PIN_INPUT, pt1_uart1_txt, pin86 */
+					0x1a8 0x26	/* P2_28: OMAP_MUX_MODE6 | AM33XX_PIN_INPUT, pt1_uart1_txt, pin86 */
+					0x19c 0x26	/* P2_30: OMAP_MUX_MODE6 | AM33XX_PIN_INPUT, pt1_uart1_txt, pin86 */
+				>;
+			};
+		};
+	};
+
+	/* PRU config */
+	fragment@6 {
+		target-path="/";
+		__overlay__ {
+			ocp {
+
+
+				#address-cells = <1>;
+				#size-cells = <1>;
+
+				pruss_soc_bus: pruss_soc_bus@4a326004 {
+					compatible = "ti,am3356-pruss-soc-bus";
+					reg = <0x4a326004 0x4>;
+					ti,hwmods = "pruss";
+					#address-cells = <1>;
+					#size-cells = <1>;
+					ranges = <0x0 0x4a300000 0x80000>;
+					status = "okay";
+
+				pruss: pruss@4a300000 {
+					status = "okay";
+					compatible = "ti,pruss-v2";
+					ti,deassert-hard-reset = "pruss", "pruss";
+					reg = <0x4a300000 0x080000>;
+					ti,pintc-offset = <0x20000>;
+					interrupt-parent = <&intc>;
+					interrupts = <20 21 22 23 24 25 26 27>;
+
+					pinctrl-names = "default";
+					pinctrl-0 = <&pru_cape_bone_pins>;
+				};
+
+                        };
+			};
+		};
+	};
+
+
+	/* PRU config */ 
+	fragment@7 {
+		target=<&edma>;
+	 	__overlay__ {
+                    ti,edma-reserved-slot-ranges = <0 4>;
+		    ti,tptcs = <&edma_tptc0 7>, <&edma_tptc1 0>;
+		};
+	};
+
+        /* Memory hole */
+	fragment@8 {
+		target-path="/";
+
+                __overlay__ {
+	                #address-cells = <1>;
+	                #size-cells = <1>;
+
+                        reserved-memory {
+		                #address-cells = <1>;
+		                #size-cells = <1>;
+		                ranges;
+
+		                pru-reserved {
+			                reg = <0x9E000000 0x020000000>;
+		                };
+                        };
+               };
+        };
+
+        /* Memory hole */
+	fragment@9 {
+		target=<&ocp>;
+                __overlay__ {
+		        -edma_tptc2{};
+               };
+        };
+
+       /* usb host */
+	fragment@10 {
+		target=<&usb0>;
+                __overlay__ {
+		        dr_mode = "host";
+               };
+        };
+
+};
