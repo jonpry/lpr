@@ -16,17 +16,21 @@ enum { CMD_ST=1, CMD_STAT, CMD_RUN };
 
 #define WRITE(fd,str) mwrite(fd,str,strlen(str))
 
+class Machine;
+Machine *gMachine=0;
+
 class Machine {
  public:
-   Machine() {}
+   Machine() : m_parent(0) {}
+   Machine(Machine* parent) : m_parent(parent) {}
    virtual ~Machine() {}
 
    virtual void onST(char *str){
      printf("Message received from PRU:%s\n",  str);
      if(strstr(str,"Stopped"))
-        onStop();
+        onMotorStop();
    }
-   virtual void onStop() {}
+   virtual void onMotorStop() {}
    virtual void onGrbl(char *str){
       printf("Mach grbl: %s\n", str);
       if(strstr(str,"unlock")){
@@ -39,6 +43,15 @@ class Machine {
    }
    virtual void onGrblReady(){}
    virtual void onOk(){printf("Def ok\n");}
+   virtual void onDone(Machine *){}
+   virtual void done(){
+      if(m_parent){
+         m_parent->onDone(this);
+      }
+      gMachine=0;
+      delete this;
+   }
+   Machine *m_parent;
 };
 
 
@@ -63,8 +76,6 @@ int fd_set_blocking(int fd, int blocking) {
         flags |= O_NONBLOCK;
     return fcntl(fd, F_SETFL, flags) != -1;
 }
-
-Machine *gMachine=0;
 
 void procFdMsg(uint8_t* readBuf, int len){
    printf("Got Msg %x\n", readBuf[0]);
@@ -191,8 +202,7 @@ class PingMachine : public Machine {
       }else if(mState == NUM_MESSAGES){
 	 /* Received all the messages the example is complete */
 	 printf("Received %d messages, closing %s\n", NUM_MESSAGES, DEVICE_NAME);
-         gMachine=0;
-         delete this;
+         done();
       }
    }
 
@@ -206,7 +216,7 @@ class HomeMachine : public Machine {
       mState=0;
    }
 
-   void onStop(){
+   void onMotorStop(){
       switch(mState++){
          case 0: move(-1000000,FAST_HOME,0); break;
          case 1: move(3200,FAST_HOME,1); break;
@@ -219,7 +229,7 @@ class HomeMachine : public Machine {
    void onOk() override {
       switch(mState++){
          case 5: WRITE(grblfd, "G4 P0.1\n"); break;
-         case 6: gMachine=0; delete this;
+         case 6: done();
       }
    }
 
@@ -232,6 +242,14 @@ class HomeMachine : public Machine {
 class RunMachine : public Machine {
  public:
    RunMachine(float z, bool movez){
+      init(z,movez);
+   }
+
+   RunMachine(Machine* parent, float z, bool movez) : Machine(parent){
+      init(z,movez);
+   }
+
+   void init(float z, bool movez){
       char buf[64];
       sprintf(buf, "G1 Y%f F%f\n", LIFT_DISTANCE+Z_OFST+z, FAST_FEED);
       if(movez)
@@ -260,12 +278,11 @@ class RunMachine : public Machine {
    void checkStop(){
       if(mStopped && mGrblStopped){
          printf("Complete\n");
-         gMachine=0;
-         delete this;
+         done();
       }
    }
 
-   void onStop(){
+   void onMotorStop(){
       char buf[64];
       switch(mState++){
          case 0: 
