@@ -406,7 +406,7 @@ int main(void) {
    fd_set_blocking(grblfd,false);
    fd_set_blocking(STDIN_FILENO,false);
 
-   FileLoader fl("out.raw.zst");
+   FileLoader fl("out.lpr");
 
    volatile uint32_t *ddr_map = (volatile uint32_t *)mmap(0, 0x02000000, PROT_READ | PROT_WRITE, MAP_SHARED, memfd, 0x9e000000);
    volatile uint32_t *edma_map = (volatile uint32_t *)mmap(0, 0x8000, PROT_READ | PROT_WRITE, MAP_SHARED, memfd, 0x49000000);

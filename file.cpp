@@ -12,14 +12,13 @@ FileLoader::FileLoader(const char* path){
    m_size = ftell(m_file);
    fseek(m_file, 0L, SEEK_SET);
 
-   fread(&m_layers,4,1,m_file);
-   fread(&m_xres,4,1,m_file);
-   fread(&m_yres,4,1,m_file);
+   fread(&m_header,sizeof(m_header),1,m_file);
 
    m_need = 0;
    m_done = -1;
    m_waitFor=-1;
    m_result=0;
+   m_z = 0;
    pthread_cond_init(&m_condNeed,0);
    pthread_cond_init(&m_condDone,0);
    pthread_mutex_init(&m_mutexNeed,0);
@@ -51,18 +50,18 @@ void FileLoader::thread_start(){
        if(inProgress==-1 || m_quit)
           return;
 
-       int csize=0,height=0;
-       fread(&height,4,1,m_file);
-       fread(&csize,4,1,m_file);
+       layer_header_t hdr={};
+       fread(&hdr,sizeof(hdr),1,m_file);
 
-       uint8_t *cdata = (uint8_t*)malloc(csize);
-       fread(cdata,1,csize,m_file);
+       uint8_t *cdata = (uint8_t*)malloc(hdr.bytes);
+       fread(cdata,1,hdr.bytes,m_file);
 
-       m_usize = ZSTD_getDecompressedSize(cdata, csize);
+       m_usize = ZSTD_getDecompressedSize(cdata, hdr.bytes);
 
        printf("Decompressing %lu\n", m_usize);
        m_result = (volatile uint8_t*)malloc(m_usize);
-       size_t ret = ZSTD_decompress((uint8_t*)m_result,m_usize,cdata,csize);
+       m_z = hdr.zpos * 1000; //To MM
+       size_t ret = ZSTD_decompress((uint8_t*)m_result,m_usize,cdata,hdr.bytes);
 
        free(cdata);
       
@@ -76,14 +75,14 @@ void FileLoader::thread_start(){
 
 void FileLoader::begin(int index){
    m_waitFor=index;
-   assert(index < m_layers);
+   assert(index < m_header.layers);
    pthread_mutex_lock(&m_mutexNeed);
    m_need = index;
    pthread_cond_signal(&m_condNeed);   
    pthread_mutex_unlock(&m_mutexNeed);
 }
 
-void FileLoader::get(uint8_t* ret){
+float FileLoader::get(uint8_t* ret){
    pthread_mutex_lock(&m_mutexDone);
    while(m_done != m_waitFor)
       pthread_cond_wait(&m_condDone,&m_mutexDone);
@@ -92,6 +91,7 @@ void FileLoader::get(uint8_t* ret){
    memcpy(ret,(void*)m_result,m_usize);
    free((void*)m_result);
    m_result=0;
+   return m_z;
 }
 
 

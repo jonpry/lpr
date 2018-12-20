@@ -21,13 +21,25 @@
 #include <algorithm>
 using namespace std;
 
+#pragma pack(push,4)
+typedef struct {
+  uint32_t xres,yres,layers;
+} header_t;
+
+typedef struct {
+  uint32_t bytes;
+  float zpos;
+} layer_header_t;
+#pragma pack(pop)
+
+
 class FileLoader{
  public:
    FileLoader(const char* path);
    ~FileLoader();
 
    void begin(int index);
-   void get(uint8_t*);
+   float get(uint8_t*);
    void thread_start();
 
    FILE* m_file;
@@ -37,7 +49,8 @@ class FileLoader{
    pthread_mutex_t m_mutexNeed, m_mutexDone;
    volatile int m_need, m_done;
    volatile bool m_quit;
-   int m_layers, m_xres, m_yres;
+   volatile float m_z;
+   header_t m_header;
    int m_waitFor;
    volatile uint8_t *m_result;
    size_t m_usize;
