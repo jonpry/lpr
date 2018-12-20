@@ -19,6 +19,7 @@ FileLoader::FileLoader(const char* path){
    m_need = 0;
    m_done = -1;
    m_waitFor=-1;
+   m_result=0;
    pthread_cond_init(&m_condNeed,0);
    pthread_cond_init(&m_condDone,0);
    pthread_mutex_init(&m_mutexNeed,0);
@@ -57,11 +58,11 @@ void FileLoader::thread_start(){
        uint8_t *cdata = (uint8_t*)malloc(csize);
        fread(cdata,1,csize,m_file);
 
-       size_t usize = ZSTD_getDecompressedSize(cdata, csize);
+       m_usize = ZSTD_getDecompressedSize(cdata, csize);
 
-       printf("Decompressing %lu\n", usize);
-       m_result = (volatile uint8_t*)malloc(usize);
-       size_t ret = ZSTD_decompress((uint8_t*)m_result,usize,cdata,csize);
+       printf("Decompressing %lu\n", m_usize);
+       m_result = (volatile uint8_t*)malloc(m_usize);
+       size_t ret = ZSTD_decompress((uint8_t*)m_result,m_usize,cdata,csize);
 
        free(cdata);
       
@@ -82,12 +83,15 @@ void FileLoader::begin(int index){
    pthread_mutex_unlock(&m_mutexNeed);
 }
 
-uint8_t* FileLoader::get(){
+void FileLoader::get(uint8_t* ret){
    pthread_mutex_lock(&m_mutexDone);
    while(m_done != m_waitFor)
       pthread_cond_wait(&m_condDone,&m_mutexDone);
    pthread_mutex_unlock(&m_mutexDone);
-   return (uint8_t*)m_result;
+   assert(m_result);
+   memcpy(ret,(void*)m_result,m_usize);
+   free((void*)m_result);
+   m_result=0;
 }
 
 

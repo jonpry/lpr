@@ -27,7 +27,7 @@ class FileLoader{
    ~FileLoader();
 
    void begin(int index);
-   uint8_t* get();
+   void get(uint8_t*);
    void thread_start();
 
    FILE* m_file;
@@ -40,6 +40,7 @@ class FileLoader{
    int m_layers, m_xres, m_yres;
    int m_waitFor;
    volatile uint8_t *m_result;
+   size_t m_usize;
 };
 
 #endif

@@ -406,6 +406,8 @@ int main(void) {
    fd_set_blocking(grblfd,false);
    fd_set_blocking(STDIN_FILENO,false);
 
+   FileLoader fl("out.raw.zst");
+
    volatile uint32_t *ddr_map = (volatile uint32_t *)mmap(0, 0x02000000, PROT_READ | PROT_WRITE, MAP_SHARED, memfd, 0x9e000000);
    volatile uint32_t *edma_map = (volatile uint32_t *)mmap(0, 0x8000, PROT_READ | PROT_WRITE, MAP_SHARED, memfd, 0x49000000);
    volatile uint32_t *pru_map = (volatile uint32_t *)mmap(0, 0x20000, PROT_READ | PROT_WRITE, MAP_SHARED, memfd, 0x4a300000);
@@ -417,8 +419,8 @@ int main(void) {
 
    struct pollfd pollfds[3] = {{rpmsgfd,POLLIN},{grblfd,POLLIN},{STDIN_FILENO,POLLIN}};
 
-
-   uint8_t *pix = load_file();
+   fl.begin(0);
+   fl.get((uint8_t*)ddr_map);
 
    //Prime the reserved memory region
    int b = 0xF0;
@@ -450,9 +452,6 @@ int main(void) {
       }
    }
 #endif
-
-   free(pix);
-   pix=0;
 
    printf("(d)ma, (r)un, e(x)it, (p)ing (h)laser, (s)top motor, run (m)otor\n");
 
