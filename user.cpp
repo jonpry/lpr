@@ -239,13 +239,13 @@ class HomeMachine : public Machine {
 #define FAST_FEED 100.0f
 #define SLOW_FEED 40.0f
 #define STAB_SEC  1.0f
-class RunMachine : public Machine {
+class LayerMachine : public Machine {
  public:
-   RunMachine(float z, bool movez){
+   LayerMachine(float z, bool movez){
       init(z,movez);
    }
 
-   RunMachine(Machine* parent, float z, bool movez) : Machine(parent){
+   LayerMachine(Machine* parent, float z, bool movez) : Machine(parent){
       init(z,movez);
    }
 
@@ -327,6 +327,64 @@ class RunMachine : public Machine {
    bool mMoveZ;
 };
 
+FileLoader *gFileLoader=0;
+volatile uint32_t *gDdrMap=0;
+
+void sanitize(){
+   //Prime the reserved memory region
+   int b = 0xF0;
+   int w = 1;
+   int i;
+#if 1
+   for(i=0; i < PIX_BYTES/4; i++){
+//    ddr_map[i] = ((uint32_t*)pix)[i];//((i&0xFF) >= b) && ((i&0xFF) < (b+w)) ? 0xAAAAAAAA: 0 ;//pix[i];//0xAAAAAAAA;
+      int mod = i %256;
+      if(mod < 250)
+         gDdrMap[i] = 0xFFFFFFFF;
+      else
+         gDdrMap[i] = 0;
+   }
+#else
+   int j;
+   for(i=0; i < 2400*10; i++){
+      for(j=0; j < 256; j++){
+	 uint32_t v=0;
+	 if(j == (i/10)%256){
+	    v=0xFFFFFFFF;
+	 }
+         if(255-j == (i/10)%256){
+            v=0xFFFFFFFF;
+         }
+         if(j==128){
+	    v = 1<<(j/8);
+	 }
+	 ddr_map[i*256+j] = v;
+      }
+   }
+#endif
+}
+
+class RunMachine : public Machine {
+ public:
+   RunMachine(){
+      get();
+      gMachine = new LayerMachine(this,10,false);
+   }
+
+   void onDone(Machine *){
+      //gMachine = new LayerMachine(this,10,false);
+   }
+
+   void get(){
+      printf("Get\n");
+      gFileLoader->get((uint8_t*)gDdrMap);
+      printf("Got\n");
+
+      sanitize();
+   }
+
+};
+
 bool quit=false;
 
 void procIn(uint8_t c){
@@ -335,7 +393,7 @@ void procIn(uint8_t c){
 	 //dma(edma_map, pru_map);
 	 break;
       case 'r': 
-         gMachine = new RunMachine(10,false);
+         new RunMachine();
          break;
       case 'p':
 	 gMachine = new PingMachine();
@@ -424,55 +482,18 @@ int main(void) {
    fd_set_blocking(STDIN_FILENO,false);
 
    printf("Creating loader\n");
-   FileLoader fl("out.lpr");
+   gFileLoader = new FileLoader("out.lpr");
 
-   volatile uint32_t *ddr_map = (volatile uint32_t *)mmap(0, 0x02000000, PROT_READ | PROT_WRITE, MAP_SHARED, memfd, 0x9e000000);
+   gDdrMap = (volatile uint32_t *)mmap(0, 0x02000000, PROT_READ | PROT_WRITE, MAP_SHARED, memfd, 0x9e000000);
    volatile uint32_t *edma_map = (volatile uint32_t *)mmap(0, 0x8000, PROT_READ | PROT_WRITE, MAP_SHARED, memfd, 0x49000000);
    volatile uint32_t *pru_map = (volatile uint32_t *)mmap(0, 0x20000, PROT_READ | PROT_WRITE, MAP_SHARED, memfd, 0x4a300000);
 
-   if (rpmsgfd < 0 || grblfd < 0 || memfd < 0 || !pru_map || !edma_map || !ddr_map) {
+   if (rpmsgfd < 0 || grblfd < 0 || memfd < 0 || !pru_map || !edma_map || !gDdrMap) {
       printf("Failed to open %s\n", DEVICE_NAME);
       return -1;
    }
 
    struct pollfd pollfds[3] = {{rpmsgfd,POLLIN},{grblfd,POLLIN},{STDIN_FILENO,POLLIN}};
-
-   //printf("Begin\n");
-   //fl.begin(0);
-   printf("Get\n");
-   fl.get((uint8_t*)ddr_map);
-   printf("Got\n");
-
-   //Prime the reserved memory region
-   int b = 0xF0;
-   int w = 1;
-#if 1
-   for(i=0; i < PIX_BYTES/4; i++){
-//    ddr_map[i] = ((uint32_t*)pix)[i];//((i&0xFF) >= b) && ((i&0xFF) < (b+w)) ? 0xAAAAAAAA: 0 ;//pix[i];//0xAAAAAAAA;
-      int mod = i %256;
-      if(mod < 250)
-         ddr_map[i] = 0xFFFFFFFF;
-      else
-         ddr_map[i] = 0;
-   }
-#else
-   int j;
-   for(i=0; i < 2400*10; i++){
-      for(j=0; j < 256; j++){
-	 uint32_t v=0;
-	 if(j == (i/10)%256){
-	    v=0xFFFFFFFF;
-	 }
-         if(255-j == (i/10)%256){
-            v=0xFFFFFFFF;
-         }
-         if(j==128){
-	    v = 1<<(j/8);
-	 }
-	 ddr_map[i*256+j] = v;
-      }
-   }
-#endif
 
    printf("(d)ma, (r)un, e(x)it, (p)ing (h)laser, (s)top motor, run (m)otor\n");
 
