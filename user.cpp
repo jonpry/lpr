@@ -342,10 +342,11 @@ void sanitize(){
    for(i=0; i < PIX_BYTES/4; i++){
 //    ddr_map[i] = ((uint32_t*)pix)[i];//((i&0xFF) >= b) && ((i&0xFF) < (b+w)) ? 0xAAAAAAAA: 0 ;//pix[i];//0xAAAAAAAA;
       int mod = i %256;
-      if(mod < 250)
-         gDdrMap[i] = 0xFFFFFFFF;
-      else
+      if(mod < 250){
+         //gDdrMap[i] = 0xFFFFFFFF;
+      }else{
          gDdrMap[i] = 0;
+      }
    }
 #else
    int j;
