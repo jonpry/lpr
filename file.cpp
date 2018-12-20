@@ -16,7 +16,7 @@ FileLoader::FileLoader(const char* path){
 
    m_need = 0;
    m_done = -1;
-   m_waitFor=-1;
+   m_waitFor=0;
    m_result=0;
    m_z = 0;
    pthread_cond_init(&m_condNeed,0);
@@ -38,7 +38,7 @@ FileLoader::~FileLoader(){
 }
 
 void FileLoader::thread_start(){
-   int inProgress=0;
+   int inProgress=-1;
    while(!m_quit){
        //Wait for m_need to change
        pthread_mutex_lock(&m_mutexNeed);

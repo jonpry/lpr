@@ -423,6 +423,7 @@ int main(void) {
    fd_set_blocking(grblfd,false);
    fd_set_blocking(STDIN_FILENO,false);
 
+   printf("Creating loader\n");
    FileLoader fl("out.lpr");
 
    volatile uint32_t *ddr_map = (volatile uint32_t *)mmap(0, 0x02000000, PROT_READ | PROT_WRITE, MAP_SHARED, memfd, 0x9e000000);
@@ -436,8 +437,11 @@ int main(void) {
 
    struct pollfd pollfds[3] = {{rpmsgfd,POLLIN},{grblfd,POLLIN},{STDIN_FILENO,POLLIN}};
 
-   fl.begin(0);
+   //printf("Begin\n");
+   //fl.begin(0);
+   printf("Get\n");
    fl.get((uint8_t*)ddr_map);
+   printf("Got\n");
 
    //Prime the reserved memory region
    int b = 0xF0;
