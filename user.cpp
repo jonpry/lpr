@@ -46,10 +46,10 @@ class Machine {
    virtual void onDone(Machine *){}
    virtual void onReady(Machine *){}
    virtual void done(){
+      gMachine=0;
       if(m_parent){
          m_parent->onDone(this);
       }
-      gMachine=0;
       delete this;
    }
    Machine *m_parent;
