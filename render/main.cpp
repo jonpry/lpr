@@ -20,6 +20,9 @@ using namespace std;
 
 #define FILENAME "temp.svg"
 
+#define BASE_LAYERS 4
+#define BASE_MULT 5
+
 #pragma pack(push,4)
 typedef struct {
   uint32_t xres,yres,layers;
@@ -57,11 +60,11 @@ int main() {
    list<string> layers;
    list<float> zs;
    for(xml_node<> *node = svg->first_node("g"); node; node = node->next_sibling("g")){
-       zs.push_back(atof(node->first_attribute("slic3r:z")->value())*1000); //slic3r output seems off by factor of 1000
+       zs.push_back(atof(node->first_attribute("slic3r:z")->value())); //slic3r output seems off by factor of 1000
        layers.push_back(node->first_attribute("id")->value());
    }
 
-   write_header(f, layers.size());
+   write_header(f, layers.size() + BASE_LAYERS * (BASE_MULT-1));
 
 
    GError* e = NULL;
@@ -73,7 +76,7 @@ int main() {
 
    int i=0;
    auto it2=zs.begin();
-   for(auto it=layers.begin(); it!=layers.end(); it++,it2++){
+   for(auto it=layers.begin(); it!=layers.end(); it++,it2++,i++){
       string layer = "#" + *it;
       cout << layer << ", @" << *it2 << endl;
 
@@ -90,10 +93,13 @@ int main() {
       cairo_scale (cr, 
              (double)XRES/6/25.4, 
              (double)YRES/9/25.4);
+
+      cairo_translate(cr,70,100);
              
       rsvg_handle_render_cairo_sub(handle, cr, layer.c_str());
 
       //cairo_surface_write_to_png (cairo_get_target(cr), "out.png");
+      //exit(0);
       uint32_t *data = (uint32_t*)cairo_image_surface_get_data(cairo_get_target(cr));
       
       size_t cbytes = ZSTD_compress( cdata, bytes,
@@ -101,8 +107,10 @@ int main() {
       cout << cbytes << endl;
 
       layer_header_t hdr = {(uint32_t)cbytes,*it2};
-      fwrite(&hdr,1,sizeof(hdr),f);
-      fwrite(cdata,1,cbytes,f);
+      for(int j=0; j < ((i<BASE_LAYERS)?BASE_MULT:1); j++){
+         fwrite(&hdr,1,sizeof(hdr),f);
+         fwrite(cdata,1,cbytes,f);
+      }
 
       cairo_destroy (cr);
    }

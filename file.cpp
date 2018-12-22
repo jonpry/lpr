@@ -60,7 +60,7 @@ void FileLoader::thread_start(){
 
        printf("Decompressing %lu\n", m_usize);
        m_result = (volatile uint8_t*)malloc(m_usize);
-       m_z = hdr.zpos * 1000; //To MM
+       m_z = hdr.zpos; //To MM
        size_t ret = ZSTD_decompress((uint8_t*)m_result,m_usize,cdata,hdr.bytes);
 
        free(cdata);
