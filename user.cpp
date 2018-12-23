@@ -314,6 +314,7 @@ class LayerMachine : public Machine {
             break;
          case 2:  
             issueRun(); 
+            mGrblStopped=true;
             break;
          case 3:
             WRITE(grblfd, "G4 P0.1\n");
