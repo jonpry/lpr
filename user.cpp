@@ -252,7 +252,7 @@ class LayerMachine : public Machine {
 
    void init(float z, bool movez){
       char buf[64];
-      sprintf(buf, "G1 Y%f F%f\n", LIFT_DISTANCE+Z_OFST+z, FAST_FEED);
+      sprintf(buf, "G1 Y%f F%f\n", LIFT_DISTANCE+Z_OFST+z, SLOW_FEED);
       if(movez)
          WRITE(grblfd, buf); 
       else
@@ -290,9 +290,9 @@ class LayerMachine : public Machine {
             if(m_parent)
               m_parent->onReady(this);
             move(-mDistance, EXPOSE_RET, 1); 
-            sprintf(buf, "G1 Y%f F%f\n", LIFT_DISTANCE+Z_OFST+mZ, SLOW_FEED);
-            if(mMoveZ)
-               WRITE(grblfd, buf); 
+            //sprintf(buf, "G1 Y%f F%f\n", LIFT_DISTANCE+Z_OFST+mZ, SLOW_FEED);
+            //if(mMoveZ)
+            //   WRITE(grblfd, buf); 
             break;
          case 1: 
             mStopped = true;

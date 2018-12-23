@@ -46,6 +46,28 @@ void write_header(FILE *f, int layers){
    fwrite(&header,1,sizeof(header),f);
 }
 
+RsvgHandle *
+mrsvg_handle_new_from_file (const gchar *file_name, GError **error)
+{
+    gchar *base_uri;
+    RsvgHandle *handle;
+    GFile *file;
+    char *scheme;
+
+    scheme = g_uri_parse_scheme (file_name);
+    if (scheme) {
+        file = g_file_new_for_uri (file_name);
+        g_free (scheme);
+    } else {
+        file = g_file_new_for_path (file_name);
+    }
+
+    handle = rsvg_handle_new_from_gfile_sync (file, RSVG_HANDLE_FLAG_UNLIMITED, NULL, error);
+    g_object_unref (file);
+
+    return handle;
+}
+
 int main() {
    int bytes=XRES*YRES/8;
    printf("Pixels: 0x%X\n", bytes);
@@ -68,9 +90,9 @@ int main() {
 
 
    GError* e = NULL;
-   RsvgHandle* handle = rsvg_handle_new_from_file(FILENAME, &e);
+   RsvgHandle* handle = mrsvg_handle_new_from_file(FILENAME, &e);
    if(e != NULL){
-      printf("Could not open svg\n");
+      printf("Could not open svg: %s\n", e->message);
       return 1;
    }
 
@@ -78,7 +100,7 @@ int main() {
    auto it2=zs.begin();
    for(auto it=layers.begin(); it!=layers.end(); it++,it2++,i++){
       string layer = "#" + *it;
-      cout << layer << ", @" << *it2 << endl;
+
 
       cairo_surface_t *s = cairo_image_surface_create (CAIRO_FORMAT_A1, XRES, YRES);
       cairo_t *cr = cairo_create (s);
@@ -98,8 +120,6 @@ int main() {
              
       rsvg_handle_render_cairo_sub(handle, cr, layer.c_str());
 
-      //cairo_surface_write_to_png (cairo_get_target(cr), "out.png");
-      //exit(0);
       uint32_t *data = (uint32_t*)cairo_image_surface_get_data(cairo_get_target(cr));
       
       size_t cbytes = ZSTD_compress( cdata, bytes,
@@ -108,6 +128,10 @@ int main() {
 
       layer_header_t hdr = {(uint32_t)cbytes,*it2};
       for(int j=0; j < ((i<BASE_LAYERS)?BASE_MULT:1); j++){
+         cout << layer << ", @" << *it2 << endl;
+         if(j==0 && it == layers.begin()){
+            cairo_surface_write_to_png (cairo_get_target(cr), "out.png");
+         }
          fwrite(&hdr,1,sizeof(hdr),f);
          fwrite(cdata,1,cbytes,f);
       }
