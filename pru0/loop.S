@@ -33,7 +33,7 @@ listen:
     LDI32     r8, 0x00022000
     LDI32     r13, 0x00012000 ; Loop counter
     LDI32     r11, 0x00010000 ; Shared RAM
-    ;LDI32     r15, 6144000 ;maximum loops
+    ;LDI32     r15, (6144000*2) ;maximum loops
 
     ;spin here until pru1 notifies us of run command
     WBS       r31, 30

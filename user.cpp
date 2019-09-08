@@ -12,7 +12,7 @@ char readBuf[MAX_BUFFER_SIZE];
 
 enum { CMD_ST=1, CMD_STAT, CMD_RUN };
 
-#define PIX_BYTES (8192*2400*10/8)
+#define PIX_BYTES (8192*2400*20/8)
 
 #define WRITE(fd,str) mwrite(fd,str,strlen(str))
 
@@ -184,7 +184,7 @@ void move(int distance, int pre, int flags){
 #define SLOW_HOME 1000
 #define SLOW_MOVE 6400
 #define FAST_MOVE 80000
-#define EXPOSE (6400*6)
+#define EXPOSE (6400*3)
 #define EXPOSE_RET (6400*12)
 
 class PingMachine : public Machine {
@@ -266,7 +266,7 @@ class LayerMachine : public Machine {
    }
 
    void issueRun(){
-      uint32_t max_loops=(int)(256*2000*9.5);
+      uint32_t max_loops=(int)(256*4000*9.5);
       uint8_t tbuf[5] = {3};
       memcpy(tbuf+1,&max_loops, 4);
       mwrite(rpmsgfd, tbuf, 5); //Issue the run command
@@ -506,7 +506,7 @@ int main(void) {
    printf("Creating loader\n");
    gFileLoader = new FileLoader("out.lpr");
 
-   gDdrMap = (volatile uint32_t *)mmap(0, 0x02000000, PROT_READ | PROT_WRITE, MAP_SHARED, memfd, 0x9e000000);
+   gDdrMap = (volatile uint32_t *)mmap(0, 0x04000000, PROT_READ | PROT_WRITE, MAP_SHARED, memfd, 0x9c000000);
    volatile uint32_t *edma_map = (volatile uint32_t *)mmap(0, 0x8000, PROT_READ | PROT_WRITE, MAP_SHARED, memfd, 0x49000000);
    volatile uint32_t *pru_map = (volatile uint32_t *)mmap(0, 0x20000, PROT_READ | PROT_WRITE, MAP_SHARED, memfd, 0x4a300000);
 

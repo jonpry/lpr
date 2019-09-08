@@ -75,8 +75,8 @@ void main(void) {
 
 
    /*** INITIALIZATION ***/
-   config_dma(0, 0x9e000000, 0x4A310000, 0x200);
-   config_dma(1, 0x9e000200, 0x4A310200, 0x200);
+   config_dma(0, 0x9c000000, 0x4A310000, 0x200);
+   config_dma(1, 0x9c000200, 0x4A310200, 0x200);
 
    /* Setup edma pointer */
    volatile uint32_t *ptr;
@@ -134,7 +134,7 @@ void main(void) {
                   do{
                      ptr[ICR] = 1<<channel;
                   } while(ptr[IPR] & (1<<channel));
-                  uint32_t nsrc = 0x9e000000 + (((loops+0x80)<<2) & (0x02000000-1));
+                  uint32_t nsrc = 0x9c000000 + (((loops+0x80)<<2) & (0x04000000-1));
                   change_dma(channel,nsrc);
                   ptr[ESR] = (1<<channel);
                }

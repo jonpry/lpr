@@ -116,7 +116,7 @@ int main() {
              (double)XRES/6/25.4, 
              (double)YRES/9/25.4);
 
-      cairo_translate(cr,70,100);
+      cairo_translate(cr,20,20);
              
       rsvg_handle_render_cairo_sub(handle, cr, layer.c_str());
 
