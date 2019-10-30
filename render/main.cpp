@@ -71,7 +71,7 @@ mrsvg_handle_new_from_file (const gchar *file_name, GError **error)
 int main() {
    int bytes=XRES*YRES/8;
    printf("Pixels: 0x%X\n", bytes);
-   uint8_t *cdata = (uint8_t*)malloc(bytes);
+   uint8_t *cdata = (uint8_t*)malloc(bytes*2);
 
    FILE *f = fopen("out.lpr","w+");
 
@@ -121,9 +121,16 @@ int main() {
       rsvg_handle_render_cairo_sub(handle, cr, layer.c_str());
 
       uint32_t *data = (uint32_t*)cairo_image_surface_get_data(cairo_get_target(cr));
-      
+      uint32_t *didata = new uint32_t[256*4000*10];
+      for(int i=0; i < 2000*10; i++){
+          for(int j=0; j < 256; j++){
+             didata[i*2 * 256 + j] = data[i*256+j];
+             didata[(i*2 + 1) * 256 + j] = data[i*256+j];
+          }
+      }
+
       size_t cbytes = ZSTD_compress( cdata, bytes,
-                data, bytes, 5);
+                didata, bytes*2, 5);
       cout << cbytes << endl;
 
       layer_header_t hdr = {(uint32_t)cbytes,*it2};
