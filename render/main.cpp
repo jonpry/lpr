@@ -12,7 +12,7 @@
 using namespace rapidxml;
 using namespace std;
 
-#define X_DPI 1500
+#define X_DPI ((int)(1500*8/10.52))
 #define Y_DPI 2000
 
 #define XRES 8192
@@ -68,9 +68,13 @@ mrsvg_handle_new_from_file (const gchar *file_name, GError **error)
     return handle;
 }
 
+extern int coords_map[8192];
+void build_table();
+
 int main() {
    int bytes=XRES*YRES/8;
    printf("Pixels: 0x%X\n", bytes);
+   build_table();
    uint8_t *cdata = (uint8_t*)malloc(bytes*2);
 
    FILE *f = fopen("out.lpr","w+");
@@ -113,26 +117,40 @@ int main() {
 
       cairo_set_source_rgba (cr, 1, 1, 1, 1);
       cairo_scale (cr, 
-             (double)XRES/6/25.4, 
-             (double)YRES/9/25.4);
+             (double)XRES/6/25.4*10.52/8, 
+             (double)YRES/9/-25.4/52.12*50);
 
-      cairo_translate(cr,20,20);
+      cairo_translate(cr,40,-200);
              
       rsvg_handle_render_cairo_sub(handle, cr, layer.c_str());
 
       uint32_t *data = (uint32_t*)cairo_image_surface_get_data(cairo_get_target(cr));
       uint32_t *didata = new uint32_t[256*4000*10];
+      uint32_t line[256];
       for(int i=0; i < 2000*10; i++){
+          memset(line,0,sizeof(line));
           for(int j=0; j < 256; j++){
-             didata[i*2 * 256 + j] = data[i*256+j];
-             didata[(i*2 + 1) * 256 + j] = data[i*256+j];
+             uint32_t word=data[i*256+j];
+             for(int k=0; k < 32; k++){
+                if((word >> k)&1){
+                   int coord = coords_map[j*32+k];
+                   if(coord < 0 || coord > 8192)
+                      continue;
+                   line[coord/32] |= 1 << (coord%32);
+                }
+             }
+          }
+          for(int j=0; j < 256; j++){
+             data[i * 256 + j] = line[j];
+             didata[i*2 * 256 + j] = line[j];
+             didata[(i*2 + 1) * 256 + j] = line[j];
           }
       }
 
       size_t cbytes = ZSTD_compress( cdata, bytes,
                 didata, bytes*2, 5);
       cout << cbytes << endl;
-
+      delete didata;
       layer_header_t hdr = {(uint32_t)cbytes,*it2};
       for(int j=0; j < ((i<BASE_LAYERS)?BASE_MULT:1); j++){
          cout << layer << ", @" << *it2 << endl;
@@ -144,6 +162,7 @@ int main() {
       }
 
       cairo_destroy (cr);
+      cairo_surface_finish(s);
    }
 
 
