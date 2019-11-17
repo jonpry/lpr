@@ -147,8 +147,13 @@ int main() {
           }
       }
 
+#ifdef DBL_RES
       size_t cbytes = ZSTD_compress( cdata, bytes,
                 didata, bytes*2, 5);
+#else
+      size_t cbytes = ZSTD_compress( cdata, bytes,
+                data, bytes, 5);
+#endif
       cout << cbytes << endl;
       delete didata;
       layer_header_t hdr = {(uint32_t)cbytes,*it2};

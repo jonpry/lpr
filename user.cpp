@@ -184,7 +184,11 @@ void move(int distance, int pre, int flags){
 #define SLOW_HOME 1000
 #define SLOW_MOVE 6400
 #define FAST_MOVE 80000
-#define EXPOSE (6400*3)
+#ifdef DBL_RES
+#define EXPOSE (6400*3) //3 for double res
+#else
+#define EXPOSE (6400*6) //3 for double res
+#endif
 #define EXPOSE_RET (6400*12)
 
 class PingMachine : public Machine {
@@ -266,7 +270,11 @@ class LayerMachine : public Machine {
    }
 
    void issueRun(){
+#ifdef DBL_RES
       uint32_t max_loops=(int)(256*4000*9.5);
+#else
+      uint32_t max_loops=(int)(256*2000*9.5);
+#endif
       uint8_t tbuf[5] = {3};
       memcpy(tbuf+1,&max_loops, 4);
       mwrite(rpmsgfd, tbuf, 5); //Issue the run command
